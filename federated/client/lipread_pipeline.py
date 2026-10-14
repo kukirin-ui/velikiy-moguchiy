@@ -140,10 +140,12 @@ class LipreadPipeline:
 
     def download(self, video_id: str, out_dir: Path, controls: Controls) -> Path:
         out_dir.mkdir(parents=True, exist_ok=True)
+        # the channel id lets the job skip channels of the data-governance journal (the pool may not know them)
         self._run([*self.yt_dlp(), "--no-playlist", "--no-progress", "--quiet", "--no-warnings", "-f", VIDEO_FORMAT,
-                   "--max-filesize", "1500M", "-o", str(out_dir / f"{video_id}.%(ext)s"), "--", YOUTUBE + video_id],
+                   "--max-filesize", "1500M", "-o", str(out_dir / f"{video_id}.%(ext)s"),
+                   "--print-to-file", "%(channel_id)s", str(out_dir / f"{video_id}.channel"), "--", YOUTUBE + video_id],
                   controls, timeout=3600)
-        files = [p for p in out_dir.glob(f"{video_id}.*") if not p.name.endswith((".part", ".ytdl"))]
+        files = [p for p in out_dir.glob(f"{video_id}.*") if not p.name.endswith((".part", ".ytdl", ".channel"))]
         if not files:
             raise JobError(f"yt-dlp не сохранил ролик {video_id}")
         return files[0]

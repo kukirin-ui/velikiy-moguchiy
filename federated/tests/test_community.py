@@ -1000,3 +1000,36 @@ def test_pipeline_finds_ffmpeg_of_the_app_environment(tmp_path, monkeypatch):
     cfg = ClientConfig(home=tmp_path / "home")
     cfg.training.lipread_ru_dir = str(lipread)
     assert LipreadPipeline(cfg).ffmpeg == str(lipread / "bin" / "ffmpeg")
+
+
+def test_exam_selection_is_balanced_by_speaker():
+    from aggregator.exam_features import balanced
+    rows = [{"id": f"{s}{i:02d}", "speaker": s} for s in "abc" for i in range(10 if s == "a" else 3)]
+    pick = balanced(rows, 7)
+    assert [r["id"] for r in pick] == ["a00", "b00", "c00", "a01", "b01", "c01", "a02"]
+    assert len(balanced(rows, 100)) == 16
+
+
+def test_client_skips_videos_of_excluded_channels(tmp_path):
+    hub = Hub(tmp_path / "hub")
+    hub.bootstrap()
+    hub.refresh()
+    home = tmp_path / "u"
+    banned = "UC" + "b" * 22
+    pipe = FakePipeline(hub.spec, channels={v.video_id: banned for v in pool(n=40)})
+    job = client_job(hub, home, "tok-alice", pipe)
+    job.exclusions_loader = lambda: {banned}
+    st = job.run()
+    assert st["state"] == "error" and "Ни один ролик" in st["message"]
+    pipe2 = FakePipeline(hub.spec, channels={v.video_id: banned for v in pool(n=40)})
+    job2 = client_job(hub, tmp_path / "u2", "tok-bob", pipe2)
+    job2.exclusions_loader = lambda: {"UC" + "c" * 22}
+    assert job2.run()["state"] == "ready_to_send"
+
+    def broken():
+        from client.community import JobError
+        raise JobError("Журнал исключений каналов недоступен")
+    job3 = client_job(hub, tmp_path / "u3", "tok-dave", FakePipeline(hub.spec))
+    job3.exclusions_loader = broken
+    st = job3.run()
+    assert st["state"] == "error" and "Журнал исключений" in st["message"]

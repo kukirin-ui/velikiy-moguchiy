@@ -112,10 +112,11 @@ class FakePipeline:
     """Без сети и моделей. Ролик и отрезки — файлы с маркером; обучение двигает адаптер к цели (или портит его)."""
 
     def __init__(self, spec: AdapterSpec, *, toward: float = 0.5, poison: float | None = None, seed: int = 0,
-                 cancel_at: str | None = None, controls: Controls | None = None):
+                 cancel_at: str | None = None, controls: Controls | None = None, channels: dict | None = None):
         self.spec, self.toward, self.poison, self.seed = spec, toward, poison, seed
         self.cancel_at, self.controls = cancel_at, controls
         self.downloaded: list[Path] = []
+        self.channels = channels or {}
 
     def _maybe_cancel(self, stage: str, controls: Controls):
         if self.cancel_at == stage:
@@ -126,6 +127,8 @@ class FakePipeline:
         out_dir.mkdir(parents=True, exist_ok=True)
         p = out_dir / f"{video_id}.mp4"
         p.write_bytes(MARKER + video_id.encode() + bytes(256))
+        if video_id in self.channels:
+            p.with_suffix(".channel").write_text(self.channels[video_id] + "\n")
         self.downloaded.append(p)
         self._maybe_cancel("download", controls)
         return p
@@ -197,6 +200,7 @@ def client_job(hub: Hub, home: Path, token: str, pipeline: FakePipeline, *, auto
     job = Job(cfg, pipeline=pipeline, transport=Transport(scfg, client=http, sleep=lambda s: None),
               spec=hub.spec, clock=lambda: hub.clock[0])
     job.venc_allowed = frozenset({hub.assets["venc"]["sha256"]})
+    job.exclusions_loader = lambda: set()
     if models_from:
         job.models_http = models_http(models_from)
     return job

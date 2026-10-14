@@ -189,6 +189,7 @@ class Job:
         self._transport, self._http = transport, http
         self.status: dict = {}
         self.venc_allowed = community_defaults.VENC_SHA256
+        self.exclusions_loader: Callable[[], set[str]] = self.fetch_exclusions
         self.models_http: httpx.Client | None = None
         self.lock = threading.Lock()
         self.controls.report = lambda f: self.write(progress=round(max(0.0, min(1.0, f)), 4))
@@ -333,8 +334,22 @@ class Job:
         os.replace(tmp, dst)
         return dst
 
+    def fetch_exclusions(self) -> set[str]:
+        """Каналы из журнала data-governance. Журнал недоступен — задание не идёт (как и задания на сервере)."""
+        try:
+            r = httpx.get(community_defaults.EXCLUSIONS_URL, timeout=30.0, follow_redirects=True)
+        except httpx.HTTPError as e:
+            raise JobError("Журнал исключений каналов недоступен: проверьте интернет") from e
+        if r.status_code == 404:
+            return set()
+        if r.status_code != 200:
+            raise JobError("Журнал исключений каналов недоступен, попробуйте позже")
+        return {ln.split()[0] for ln in r.text.splitlines()
+                if ln.strip() and not ln.startswith("#") and re.match(r"^UC[A-Za-z0-9_-]{22}\b", ln)}
+
     def collect_clips(self, task: dict, work: Path) -> list[ClipItem]:
         videos_dir, clips_dir = work / "videos", work / "clips"
+        excluded = self.exclusions_loader()
         clips, failed = [], 0
         n = len(task["videos"])
         for i, v in enumerate(task["videos"]):
@@ -342,6 +357,9 @@ class Job:
             self.write(stage="download", progress=i / n)
             try:
                 video = ensure_inside(self.pipeline.download(v["video_id"], videos_dir, self.controls), work)
+                channel = video.with_suffix(".channel")
+                if channel.exists() and channel.read_text().strip() in excluded:
+                    raise JobError("канал попросил исключить свои ролики")
                 cut = self.pipeline.cut(video, v["segments"], clips_dir, f"{i:02d}", self.controls)
             except Cancelled:
                 raise

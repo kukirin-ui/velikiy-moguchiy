@@ -50,6 +50,8 @@ jobs:
       FL_LIPREAD_DIR: ${{ github.workspace }}/lipread
       MULTIVSR_COMMIT: af28d8c4b687ee7e41942732eb240e0cdfff3ccd
       MODEL_PTH_SHA256: cd89f095cb3c653bacea5d18155b2235d78f9c36bd001db7aef60cca2a0cbf2c
+      VENC_URL: https://github.com/zigansh1n/velikiy-moguchiy-models/releases/download/lips-0.1/velikiy-moguchiy-lips-0.1-venc.pth
+      VENC_SHA256: 5d3d2808d7f2ca462c9ae8851d8b2114f3dc6937887f57c0ceeddf19d91f16cf
     steps:
       - name: Check configuration
         id: cfg
@@ -101,9 +103,14 @@ jobs:
           EOF
           if [ -s "$RUNNER_TEMP/exam/exam.jsonl" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "FL_EXAM_DIR=$RUNNER_TEMP/exam" >> "$GITHUB_ENV"
+          elif [ -s "$RUNNER_TEMP/exam/raw/exam_raw.jsonl" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "FL_EXAM_DIR=$RUNNER_TEMP/exam_built" >> "$GITHUB_ENV"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "### Federated aggregation skipped: the exam dataset has no exam.jsonl yet (federated/docs/DEPLOY.md)" >> "$GITHUB_STEP_SUMMARY"
+            echo "### Federated aggregation skipped: the exam dataset has neither exam.jsonl nor raw/ yet (federated/docs/DEPLOY.md)" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Install (CPU torch and the MultiVSR inference dependencies)
@@ -139,6 +146,17 @@ jobs:
           fi
           echo "$MODEL_PTH_SHA256  weights/model.pth" | sha256sum -c -
 
+      - name: Exam features from the raw exam clips (no secrets)
+        if: steps.fetch.outputs.build == 'true'
+        working-directory: lipread
+        run: |
+          command -v ffmpeg > /dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg; }
+          curl -L --fail --retry 5 -o "$RUNNER_TEMP/venc.pth" "$VENC_URL"
+          echo "$VENC_SHA256  $RUNNER_TEMP/venc.pth" | sha256sum -c -
+          env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 python ../federated/aggregator/exam_features.py \
+            --raw "$RUNNER_TEMP/exam/raw" --venc "$RUNNER_TEMP/venc.pth" --lipread . --out "$FL_EXAM_DIR" \
+            --limit "${FL_EXAM_LIMIT:-120}"
+
       - name: Score (offline, no secrets)
         id: score
         if: steps.fetch.outputs.ready == 'true'
@@ -146,7 +164,6 @@ jobs:
         env:
           FL_INBOX: dir:${{ runner.temp }}/round/inbox
           FL_MODELS: dir:${{ runner.temp }}/round/models
-          FL_EXAM_DIR: ${{ runner.temp }}/exam
         run: python -m aggregator.run score --out "$RUNNER_TEMP/plan.json"
 
       - uses: actions/upload-artifact@v4

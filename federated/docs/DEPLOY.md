@@ -58,8 +58,17 @@ cd federated && python -m space.build_pool --rows ../lipread/data/public_meta/ru
 hf upload z1gansh1n/velikiy-moguchiy-inbox shards pool/shards --repo-type dataset
 ```
 
-**Экзамен** — признаки VTP публичных клипов, которых нет в пуле (например, тест MuAViC-ru), посчитанные визуальной
-частью lips-0.1, плюс эталонные тексты. Записи автора проекта в экзамен не входят никогда.
+**Экзамен** — публичные клипы, которых нет в пуле (MuAViC-ru, valid и test), с эталонными текстами. Записи автора
+проекта в экзамен не входят никогда. Проще всего положить в датасет сами клипы — признаки посчитает задание оценки в
+GitHub Actions (детектор лица из кода MultiVSR и визуальная часть lips-0.1 по закреплённым SHA-256, CPU, без секретов,
+`aggregator/exam_features.py`, по умолчанию 120 клипов поровну по говорящим):
+
+```
+raw/exam_raw.jsonl  {"id": ..., "file": "<имя клипа>", "text": "<эталон>", "speaker": "<говорящий>"} на строку
+raw/<клип>.mp4
+```
+
+Либо готовые признаки (тогда задание их не считает):
 
 ```
 exam.jsonl          {"id": "<16 hex>", "text": "<эталон>", "feats": "feats/<id>.npy"} на строку
@@ -104,6 +113,9 @@ hf upload z1gansh1n/velikiy-moguchiy-exam exam . --repo-type dataset
 после N отзываются). Зеркало версий релизами в `velikiy-moguchiy-models` — с секретом `MODELS_REPO_TOKEN`.
 
 ## Mac участника
+
+Ролик канала из журнала `data-governance/exclusions/channels.tsv` клиент пропускает сам: yt-dlp сообщает канал при
+скачивании (у роликов пула из MultiVSR канал заранее не известен); журнал недоступен — задание не идёт.
 
 Отдельно ничего ставить не нужно. Клиент обучения (`federated/client`, `federated/protocol`) входит в приложение и
 ставится тем же нажатием «Установить», что и режим «губы» (`SPLipsRuntime`): код копируется в окружение приложения
