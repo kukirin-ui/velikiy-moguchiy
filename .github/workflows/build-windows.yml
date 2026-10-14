@@ -2,7 +2,7 @@ name: Build Windows app
 
 # Builds the Windows app (windows/, unsigned) and uploads
 # VelikiyMoguchiy-Windows-x64.zip as an artifact.
-#   - v* tags: release.yml calls this workflow and attaches the zip to the draft;
+#   - releases: release.yml calls this workflow and attaches the zip to the release;
 #   - win-v* tags and manual runs (Actions > Build Windows app > Run workflow):
 #     the artifact only.
 # Pull requests are built and tested by tests.yml.
@@ -10,6 +10,15 @@ name: Build Windows app
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      ref:
+        description: Commit to build (release.yml); empty builds the triggering commit
+        type: string
+        default: ""
+      version:
+        description: Version to stamp, for example 0.2.1 (release.yml); empty takes it from a tag
+        type: string
+        default: ""
   push:
     tags: ["win-v*"]
 
@@ -31,6 +40,8 @@ jobs:
         working-directory: windows
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -41,9 +52,12 @@ jobs:
 
       - name: Version from the tag
         # v0.1.0, win-v0.1.0 -> 0.1.0 in Cargo.toml and the exe's file properties
-        if: github.ref_type == 'tag'
+        if: inputs.version != '' || github.ref_type == 'tag'
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
-          VERSION="${GITHUB_REF_NAME#win-}"; VERSION="${VERSION#v}"; VERSION="${VERSION%%-*}"
+          VERSION="${VERSION_INPUT:-$GITHUB_REF_NAME}"
+          VERSION="${VERSION#win-}"; VERSION="${VERSION#v}"; VERSION="${VERSION%%-*}"
           IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
           sed -i "s/0,1,0,0/$MAJOR,$MINOR,$PATCH,0/g; s/\"0\.1\.0\"/\"$VERSION\"/g" app/resources/app.rc

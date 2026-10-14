@@ -6,9 +6,9 @@ name: Build Apple apps
 # macOS runner minutes are scarce, so this never runs on ordinary pushes:
 #   - pull request: add the label "build" (remove and add it again to rebuild);
 #   - tags: mac-v* builds only the Mac app, ios-v* only the IPA;
-#     v* tags build both through release.yml, which calls this workflow,
-#     so a release tag is built once, not twice; a tag build takes its
-#     version from the tag;
+#     releases build both through release.yml, which calls this workflow
+#     with the commit and the version, so a release is built once, not
+#     twice; a tag build takes its version from the tag;
 #   - manually: Actions > Build Apple apps > Run workflow.
 
 on:
@@ -30,6 +30,14 @@ on:
       ios:
         type: boolean
         default: true
+      ref:
+        description: Commit to build (release.yml); empty builds the triggering commit
+        type: string
+        default: ""
+      version:
+        description: Version to stamp, for example 0.2.1 (release.yml); empty takes it from a tag
+        type: string
+        default: ""
   push:
     tags: ["mac-v*", "ios-v*"]
   pull_request:
@@ -63,6 +71,8 @@ jobs:
         working-directory: mac
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -89,9 +99,12 @@ jobs:
 
       - name: Version from the tag
         # v0.1.0, mac-v0.1.0 -> CFBundleShortVersionString 0.1.0 (a -suffix is dropped)
-        if: github.ref_type == 'tag'
+        if: inputs.version != '' || github.ref_type == 'tag'
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
-          VERSION="${GITHUB_REF_NAME#mac-}"; VERSION="${VERSION#v}"; VERSION="${VERSION%%-*}"
+          VERSION="${VERSION_INPUT:-$GITHUB_REF_NAME}"
+          VERSION="${VERSION#mac-}"; VERSION="${VERSION#v}"; VERSION="${VERSION%%-*}"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" MacApp/VelikiyMoguchiy/Info.plist
           echo "Mac app version $VERSION"
 
@@ -178,6 +191,8 @@ jobs:
         working-directory: ios
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -193,10 +208,13 @@ jobs:
         run: brew install xcodegen
 
       - name: Build unsigned IPA
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
+          if [ -n "$VERSION_INPUT" ] || [ "$GITHUB_REF_TYPE" = tag ]; then
             # v0.1.0, ios-v0.1.0 -> MARKETING_VERSION 0.1.0 (a -suffix is dropped)
-            VERSION="${GITHUB_REF_NAME#ios-}"; VERSION="${VERSION#v}"; export MARKETING_VERSION="${VERSION%%-*}"
+            VERSION="${VERSION_INPUT:-$GITHUB_REF_NAME}"
+            VERSION="${VERSION#ios-}"; VERSION="${VERSION#v}"; export MARKETING_VERSION="${VERSION%%-*}"
           fi
           Scripts/build-unsigned-ipa.sh dist/VelikiyMoguchiy-iOS-unsigned.ipa
 

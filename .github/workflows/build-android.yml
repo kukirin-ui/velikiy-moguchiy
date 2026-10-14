@@ -3,7 +3,7 @@ name: Build Android app
 # Unit tests, a debug APK and a release APK of the keyboard in android/, on Linux.
 #
 #   - pushes to main and pull requests that touch android/ (or this file);
-#   - tags android-v*; v* tags build it through release.yml, which calls this workflow;
+#   - tags android-v*; releases build it through release.yml, which calls this workflow;
 #   - manually: Actions > Build Android app > Run workflow.
 #
 # The release APK is signed only when the repository has the secrets ANDROID_KEYSTORE_BASE64,
@@ -24,6 +24,15 @@ on:
       - ".github/workflows/build-android.yml"
   workflow_dispatch:
   workflow_call:
+    inputs:
+      ref:
+        description: Commit to build (release.yml); empty builds the triggering commit
+        type: string
+        default: ""
+      version:
+        description: Version to stamp, for example 0.2.1 (release.yml); empty takes it from a tag
+        type: string
+        default: ""
 
 concurrency:
   # A call from release.yml runs under the caller's workflow name.
@@ -43,6 +52,8 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: gradle/actions/wrapper-validation@v4
 
@@ -55,9 +66,12 @@ jobs:
 
       - name: Version from the tag
         # v0.2.1, android-v0.2.1 -> versionName 0.2.1, versionCode 201 (a -suffix is dropped)
-        if: github.ref_type == 'tag'
+        if: inputs.version != '' || github.ref_type == 'tag'
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
-          VERSION="${GITHUB_REF_NAME#android-}"; VERSION="${VERSION#v}"; VERSION="${VERSION%%-*}"
+          VERSION="${VERSION_INPUT:-$GITHUB_REF_NAME}"
+          VERSION="${VERSION#android-}"; VERSION="${VERSION#v}"; VERSION="${VERSION%%-*}"
           IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
           CODE=$(( ${MAJOR:-0} * 10000 + ${MINOR:-0} * 100 + ${PATCH:-0} ))
           echo "GRADLE_VERSION_ARGS=-PvmVersionName=$VERSION -PvmVersionCode=$CODE" >> "$GITHUB_ENV"

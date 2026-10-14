@@ -1,32 +1,79 @@
 name: Release
 
-# A v* tag (for example v0.1.0) builds the Mac app and the unsigned IPA through
-# build-apple.yml, the Android APKs through build-android.yml and the Windows app
-# through build-windows.yml, and creates a DRAFT GitHub release with the files,
-# their SHA-256 checksums and the Russian release notes from .github/release-notes.md.
-# Nothing is published until the draft is published by hand on the Releases
-# page. Tags are made by the owner; this workflow never creates one.
+# Two ways to a release, both building the Mac app and the unsigned IPA (build-apple.yml), the Android
+# APKs (build-android.yml) and the Windows app (build-windows.yml) with SHA-256 checksums:
 #
-# Before anything is built, the privacy guard runs on the tagged tree and the tagged commit must be
-# authored and committed by a GitHub no-reply address. After the builds, tools/scan_artifacts.py reads
-# every file in them for home folders, personal e-mails and the author's identifiers. Any finding stops
-# the release before the draft exists.
+#   - automatic, once a day and on manual dispatch: tools/release/plan.py takes the newest commit of
+#     main whose push checks are all green and, when it changes a product since the last v* tag,
+#     picks the next version (patch; «[minor]» or «[major]» in a commit message or PR title bumps
+#     more), builds that commit, tags it and PUBLISHES the release, then runs stores.yml so the
+#     Homebrew cask and the AltStore source follow. A release made with GITHUB_TOKEN does not
+#     trigger other workflows, hence the direct call. Dispatch inputs force a version or a part, or
+#     build everything without publishing (dry run);
+#   - a v* tag pushed by hand: the same builds end in a DRAFT release that is published on the
+#     Releases page (stores.yml then runs on its own, on the «published» event).
+#
+# Release notes are .github/release-notes.md with the version and «Что нового», the titles of the PRs
+# merged since the previous tag. The privacy guard checks the notes, and the text review checks the
+# generated part (a finding of medium severity or higher stops the release). Before anything is built,
+# the privacy guard runs on the released tree and the released commit must be authored and committed
+# by a GitHub no-reply address. After the builds, tools/scan_artifacts.py reads every file in them
+# for home folders, personal e-mails and the author's identifiers. Any finding stops the release
+# before it exists. Pull requests that change the release tooling get a dry-run plan.
 
 on:
   push:
     tags: ["v*"]
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to bump (auto reads «[minor]» and «[major]» in commits and PR titles)
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+      version:
+        description: Exact version instead, for example 0.1.0
+        type: string
+        default: ""
+      force:
+        description: Release even when no product changed
+        type: boolean
+        default: false
+      dry_run:
+        description: Build and check everything, but create no tag and no release
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - tools/release/**
+      - tools/text_review.py
+      - .github/release-notes.md
+      - .github/workflows/release.yml
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  group: release-${{ github.event_name == 'push' && github.ref || github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'auto' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  privacy:
-    name: Privacy check
+  plan:
+    name: Plan
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      sha: ${{ steps.plan.outputs.sha }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,17 +81,79 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Tool tests
+        run: |
+          python3 -m pip install -q pytest
+          python3 -m pytest -q -p no:cacheprovider tools/test_text_review.py
+          python3 tools/release/plan.py selftest
+
+      - name: Plan
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BUMP: ${{ inputs.bump || 'auto' }}
+          VERSION: ${{ inputs.version }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          OUT=(--notes release-notes.md --changes release-changes.md)
+          case "$EVENT" in
+            push) python3 tools/release/plan.py tag "$GITHUB_REF_NAME" "${OUT[@]}" ;;
+            pull_request) python3 tools/release/plan.py auto --dry-run "${OUT[@]}" ;;
+            *)
+              ARGS=(--bump "$BUMP")
+              if [ -n "$VERSION" ]; then ARGS+=(--version "$VERSION"); fi
+              if [ "$FORCE" = true ]; then ARGS+=(--force); fi
+              python3 tools/release/plan.py auto "${ARGS[@]}" "${OUT[@]}" ;;
+          esac
+
+      - name: Notes, privacy guard
+        if: hashFiles('release-notes.md') != ''
+        env:
+          PRIVACY_GUARD_EXTRA: ${{ secrets.PRIVACY_GUARD_EXTRA }}
+        run: python3 tools/privacy_guard.py release-notes.md
+
+      - name: Notes, text review
+        if: hashFiles('release-changes.md') != ''
+        env:
+          TEXT_REVIEW_ENDPOINT: ${{ vars.TEXT_REVIEW_ENDPOINT }}
+          TEXT_REVIEW_MODEL: ${{ vars.TEXT_REVIEW_MODEL }}
+          TEXT_REVIEW_TOKEN: ${{ secrets.TEXT_REVIEW_TOKEN }}
+        run: python3 tools/text_review.py --file release-changes.md --fail-on medium
+
+      - uses: actions/upload-artifact@v4
+        if: hashFiles('release-notes.md') != ''
+        with:
+          name: release-notes
+          path: release-notes.md
+
+  privacy:
+    name: Privacy check
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
       - name: Guard tests
         run: python3 -m pip install -q pytest && python3 -m pytest -q -p no:cacheprovider tools/test_privacy_guard.py tools/test_scan_artifacts.py
-      - name: Tagged tree
+      - name: Released tree
         env:
           PRIVACY_GUARD_EXTRA: ${{ secrets.PRIVACY_GUARD_EXTRA }}
         run: python3 tools/privacy_guard.py
       - name: Release commit
+        env:
+          SHA: ${{ needs.plan.outputs.sha }}
         run: |
-          python3 tools/privacy_guard.py --commits "${GITHUB_SHA}^!" -- tools/privacy_guard.py
-          bad=$(git log -1 --format='%ae%n%ce' "$GITHUB_SHA" \
-                | grep -vE '^([0-9]+\+)?[A-Za-z0-9-]+@users\.noreply\.github\.com$|^noreply@github\.com$' || true)
+          python3 tools/privacy_guard.py --commits "${SHA}^!" -- tools/privacy_guard.py
+          bad=$(git log -1 --format='%ae%n%ce' "$SHA" \
+                | grep -vE '^([0-9]+\+)?[A-Za-z0-9-]+(\[bot\])?@users\.noreply\.github\.com$|^noreply@github\.com$' || true)
           if [ -n "$bad" ]; then
             echo "::error::The release commit must have a GitHub no-reply address as author and committer"
             exit 1
@@ -52,45 +161,62 @@ jobs:
 
   build:
     name: Build
-    needs: privacy
+    needs: [plan, privacy]
     uses: ./.github/workflows/build-apple.yml
     with:
       mac: true
       ios: true
+      ref: ${{ needs.plan.outputs.sha }}
+      version: ${{ needs.plan.outputs.version }}
 
   android:
     name: Android
-    needs: privacy
+    needs: [plan, privacy]
     uses: ./.github/workflows/build-android.yml
     # The release APK is signed with the ANDROID_* secrets when they exist.
     secrets: inherit
+    with:
+      ref: ${{ needs.plan.outputs.sha }}
+      version: ${{ needs.plan.outputs.version }}
 
   windows:
     name: Build Windows
-    needs: privacy
+    needs: [plan, privacy]
     uses: ./.github/workflows/build-windows.yml
+    with:
+      ref: ${{ needs.plan.outputs.sha }}
+      version: ${{ needs.plan.outputs.version }}
 
-  draft:
-    name: Draft release
-    needs: [privacy, build, android, windows]
+  release:
+    name: ${{ github.event_name == 'push' && 'Draft release' || 'Publish release' }}
+    needs: [plan, privacy, build, android, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
 
       - name: Download the builds
         uses: actions/download-artifact@v4
         with:
+          pattern: VelikiyMoguchiy-*
           path: dist
           merge-multiple: true
+
+      - name: Download the notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}
 
       - name: Privacy scan of the builds
         env:
           PRIVACY_GUARD_EXTRA: ${{ secrets.PRIVACY_GUARD_EXTRA }}
         run: python3 tools/scan_artifacts.py dist/VelikiyMoguchiy-macOS-arm64.zip dist/VelikiyMoguchiy-iOS-unsigned.ipa dist/VelikiyMoguchiy-Android*.apk dist/VelikiyMoguchiy-Windows-x64.zip
 
-      - name: Checksums and release notes
+      - name: Checksums
         run: |
           set -euo pipefail
           cd dist
@@ -100,26 +226,46 @@ jobs:
           test -f VelikiyMoguchiy-Windows-x64.zip
           sha256sum VelikiyMoguchiy-macOS-arm64.zip VelikiyMoguchiy-iOS-unsigned.ipa VelikiyMoguchiy-Android*.apk VelikiyMoguchiy-Windows-x64.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          cd ..
-          VERSION="${GITHUB_REF_NAME#v}"
-          sed "s/{{VERSION}}/${VERSION}/g" .github/release-notes.md > "$RUNNER_TEMP/notes.md"
 
-      - name: Create or update the draft
+      - name: Create or update the release
+        if: inputs.dry_run != true
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          SHA: ${{ needs.plan.outputs.sha }}
+          PRERELEASE: ${{ needs.plan.outputs.prerelease }}
+          NOTES: ${{ runner.temp }}/release-notes.md
         run: |
           set -euo pipefail
           FILES=(dist/VelikiyMoguchiy-macOS-arm64.zip dist/VelikiyMoguchiy-iOS-unsigned.ipa dist/VelikiyMoguchiy-Android*.apk dist/VelikiyMoguchiy-Windows-x64.zip dist/SHA256SUMS.txt)
           TITLE="«Великий & Могучий» ${TAG#v}"
+          FLAGS=()
+          if [ "$PRERELEASE" = true ]; then FLAGS=(--prerelease); fi
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            # A re-run: refresh the files and notes, keep whatever state the release is in.
+            # A re-run: refresh the files and notes.
             gh release upload "$TAG" "${FILES[@]}" --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
-          else
-            PRERELEASE=()
-            case "$TAG" in *-*) PRERELEASE=(--prerelease) ;; esac
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$NOTES"
+          elif [ "$EVENT" = push ]; then
             gh release create "$TAG" "${FILES[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
-              "${PRERELEASE[@]}" --title "$TITLE" --notes-file "$RUNNER_TEMP/notes.md"
+              "${FLAGS[@]}" --title "$TITLE" --notes-file "$NOTES"
+          else
+            # Uploaded as a draft first, so the release never appears with half of its files; the tag
+            # is created on the commit when the draft is published.
+            gh release create "$TAG" "${FILES[@]}" --repo "$GITHUB_REPOSITORY" --target "$SHA" --draft \
+              "${FLAGS[@]}" --title "$TITLE" --notes-file "$NOTES"
           fi
-          echo "Draft ready: https://github.com/${GITHUB_REPOSITORY}/releases (publish it by hand)"
+          if [ "$EVENT" = push ]; then
+            echo "Draft ready: https://github.com/${GITHUB_REPOSITORY}/releases (publish it by hand)"
+          else
+            if [ "$PRERELEASE" != true ]; then FLAGS=(--latest); fi
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false "${FLAGS[@]}"
+            echo "Published: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+          fi
+
+  stores:
+    name: Homebrew and AltStore
+    needs: [plan, release]
+    if: github.event_name != 'push' && inputs.dry_run != true
+    uses: ./.github/workflows/stores.yml
+    secrets: inherit

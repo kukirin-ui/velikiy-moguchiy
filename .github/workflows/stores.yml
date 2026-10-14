@@ -1,6 +1,7 @@
 name: Homebrew and AltStore
 
-# When a release is published, points both install channels at it:
+# When a release is published (by hand, or by release.yml, which calls this workflow because a release
+# made with GITHUB_TOKEN triggers no «published» event), points both install channels at it:
 #   - docs/altstore/source.json, the AltStore and SideStore source of the IPA
 #     (tools/altstore/source.py), served from raw.githubusercontent.com;
 #   - tools/homebrew/Casks/velikiy-moguchiy.rb gets the version and sha256 of the
@@ -15,6 +16,7 @@ on:
   release:
     types: [published, deleted]
   workflow_dispatch:
+  workflow_call:
   pull_request:
     paths:
       - tools/altstore/**
