@@ -3,7 +3,7 @@
 Это не пункт условий использования, а отдельное решение пользователя (см. docs/AGREEMENT.md, PRIVACY.md, TERMS.md).
 Хранится в <каталог установки>/consent.json:
 
-    {"contribute_training": true, "changed_at": "2026-10-14T12:00:00Z", "agreement": "2026-10-14"}
+    {"contribute_training": true, "changed_at": "2026-10-14T12:00:00Z", "agreement": "2026-10-15"}
 
 Нет файла, он повреждён, в нём false или согласие дано на другую редакцию docs/AGREEMENT.md: клиент ничего не делает —
 не скачивает модель, не обучает и не отправляет. Новая редакция текста (AGREEMENT_VERSION) требует нового согласия.
@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 FILE_NAME = "consent.json"
-AGREEMENT_VERSION = "2026-10-14"   # редакция docs/AGREEMENT.md, с которой пользователь согласился
+AGREEMENT_VERSION = "2026-10-15"   # редакция docs/AGREEMENT.md, с которой пользователь согласился
 TRAINING = (FILE_NAME, "contribute_training")
 HELP_TRAIN = ("community-consent.json", "help_train")
 
