@@ -100,19 +100,13 @@ jobs:
         run: cargo build --workspace
       - name: Build with local recognition
         # Not released (sherpa-onnx brings GPL-3.0 espeak-ng), but kept building.
-        # After a cache restore the sherpa-onnx-sys build script can count as already run while the libraries
-        # it downloaded into target/sherpa-onnx-prebuilt are gone; the crate then fails to link ("could not
-        # find native static library"). Cleaning it makes the script download them again.
+        # rust-cache restores target/sherpa-onnx-prebuilt as an empty lib/ folder, and the sherpa-onnx-sys build
+        # script takes an existing lib/ for a finished download. A PR that makes the crate recompile then fails
+        # with "could not find native static library". Dropping the folder makes the script download it again.
         run: |
+          rm -rf target/sherpa-onnx-prebuilt
           cargo clean -p sherpa-onnx-sys
           cargo build --workspace --features velikiy-moguchiy-windows/sherpa-onnx
-      - name: Debug sherpa
-        if: failure()
-        run: |
-          find target -maxdepth 4 -ipath '*sherpa*' | head -40
-          find target -ipath '*sherpa-onnx-prebuilt*' -name '*.lib' | head -40
-          ls -la target/debug/build | grep -i sherpa || true
-          for d in target/debug/build/sherpa-onnx-sys-*; do echo "$d"; ls "$d"; cat "$d/output" 2>/dev/null | head; cat "$d/stderr" 2>/dev/null | head; done
 
   federated:
     name: Federated (pytest)
