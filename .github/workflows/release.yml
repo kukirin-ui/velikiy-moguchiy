@@ -188,7 +188,7 @@ jobs:
       version: ${{ needs.plan.outputs.version }}
 
   release:
-    name: ${{ github.event_name == 'push' && 'Draft release' || 'Publish release' }}
+    name: Release files
     needs: [plan, privacy, build, android, windows]
     runs-on: ubuntu-latest
     permissions:
