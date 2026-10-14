@@ -1,0 +1,120 @@
+name: Homebrew and AltStore
+
+# When a release is published, points both install channels at it:
+#   - docs/altstore/source.json, the AltStore and SideStore source of the IPA
+#     (tools/altstore/source.py), served from raw.githubusercontent.com;
+#   - tools/homebrew/Casks/velikiy-moguchiy.rb gets the version and sha256 of the
+#     latest stable Mac build (tools/homebrew/bump.py).
+# Both are committed to main with the BOT_PUSH_KEY deploy key, the one way past
+# the main ruleset. Then tools/homebrew/ is pushed to the tap
+# zigansh1n/homebrew-tap with HOMEBREW_TAP_KEY, a write deploy key of the tap;
+# without that secret the tap step is skipped and the job stays green
+# (docs/AUTOMATION.md). In pull requests both tools are only self-tested.
+
+on:
+  release:
+    types: [published, deleted]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - tools/altstore/**
+      - tools/homebrew/**
+      - .github/workflows/stores.yml
+
+concurrency:
+  group: stores
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check the cask and the source
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/altstore/source.py selftest
+      - run: python3 tools/homebrew/bump.py selftest
+      - run: ruby -c tools/homebrew/Casks/velikiy-moguchiy.rb
+
+  update:
+    name: Update the cask and the source
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CASK: tools/homebrew/Casks/velikiy-moguchiy.rb
+      TAP: zigansh1n/homebrew-tap
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          ssh-key: ${{ secrets.BOT_PUSH_KEY }}
+
+      - name: AltStore source
+        run: python3 tools/altstore/source.py
+
+      - name: Homebrew cask
+        id: cask
+        run: |
+          set -euo pipefail
+          # gh's "latest" is the newest published release that is not a prerelease.
+          TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
+          if [ -z "$TAG" ]; then
+            echo "No stable release yet; the cask is left as it is"
+            exit 0
+          fi
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern VelikiyMoguchiy-macOS-arm64.zip --dir "$RUNNER_TEMP"
+          SHA=$(sha256sum "$RUNNER_TEMP/VelikiyMoguchiy-macOS-arm64.zip" | cut -d' ' -f1)
+          python3 tools/homebrew/bump.py "$CASK" "${TAG#v}" "$SHA"
+          ruby -c "$CASK"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit to main
+        run: |
+          set -euo pipefail
+          git add docs/altstore/source.json "$CASK"
+          if git diff --cached --quiet; then
+            echo "Nothing changed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Point Homebrew and AltStore at the latest release"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Push to the tap
+        if: steps.cask.outputs.version != ''
+        env:
+          TAP_KEY: ${{ secrets.HOMEBREW_TAP_KEY }}
+          VERSION: ${{ steps.cask.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TAP_KEY" ]; then
+            echo "::notice::HOMEBREW_TAP_KEY is not set, so $TAP was not updated (docs/AUTOMATION.md)"
+            exit 0
+          fi
+          install -m 600 /dev/null "$RUNNER_TEMP/tap_key"
+          printf '%s\n' "$TAP_KEY" > "$RUNNER_TEMP/tap_key"
+          gh api meta --jq '.ssh_keys[]' | sed 's/^/github.com /' > "$RUNNER_TEMP/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tap_key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts -o StrictHostKeyChecking=yes"
+          git clone "git@github.com:$TAP.git" "$RUNNER_TEMP/tap"
+          cd "$RUNNER_TEMP/tap"
+          # a freshly created tap has no commits yet
+          git rev-parse -q --verify HEAD >/dev/null || git symbolic-ref HEAD refs/heads/main
+          mkdir -p Casks
+          cp "$GITHUB_WORKSPACE/$CASK" Casks/
+          cp "$GITHUB_WORKSPACE/tools/homebrew/README.md" README.md
+          git add Casks README.md
+          if git diff --cached --quiet; then
+            echo "The tap is up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "velikiy-moguchiy $VERSION"
+          git push origin HEAD:main

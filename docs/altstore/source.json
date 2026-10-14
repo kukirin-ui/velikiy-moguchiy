@@ -1,0 +1,12 @@
+{
+  "name": "Великий & Могучий",
+  "identifier": "io.github.zigansh1n.velikiy-moguchiy",
+  "sourceURL": "https://raw.githubusercontent.com/zigansh1n/velikiy-moguchiy/main/docs/altstore/source.json",
+  "subtitle": "Русская голосовая диктовка для iPhone",
+  "description": "Официальный источник открытого проекта «Великий & Могучий»: клавиатуры RU и EN с нейродиктовкой. Сборки берутся со страницы релизов на GitHub.",
+  "website": "https://github.com/zigansh1n/velikiy-moguchiy",
+  "iconURL": "https://raw.githubusercontent.com/zigansh1n/velikiy-moguchiy/main/ios/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png",
+  "tintColor": "9B3A2C",
+  "apps": [],
+  "news": []
+}

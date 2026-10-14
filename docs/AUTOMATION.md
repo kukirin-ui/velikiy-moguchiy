@@ -17,6 +17,21 @@
 | Проверка журнала исключений | PR, меняющий `data-governance/` | `.github/workflows/data-governance.yml` |
 | Сборка приложения для Mac и IPA | метка `build` на PR, теги `mac-v*` и `ios-v*`, вручную | `.github/workflows/build-apple.yml` |
 | Черновик релиза с файлами сборки | тег `v*` (теги ставятся вручную, черновик публикуется вручную) | `.github/workflows/release.yml`, `.github/release-notes.md` |
+| Формула Homebrew и источник AltStore | при публикации или удалении релиза | `.github/workflows/stores.yml`, `tools/homebrew/`, `tools/altstore/` |
+| Ярлыки «good first issue» и «help wanted» | при изменении `tools/labels/labels.json` | `.github/workflows/labels.yml` |
+
+## Что сделать владельцу один раз
+
+1. **Обложка репозитория.** Settings → General → Social preview → Edit → Upload an image… и выбрать
+   [`docs/assets/social-preview.png`](assets/social-preview.png). Обложку показывают мессенджеры и сайты, когда в
+   них вставляют ссылку на репозиторий. Через API её не загрузить, только руками.
+2. **Опубликовать v0.1.0.** Тег `v0.1.0` запускает workflow «Release», который собирает черновик релиза; его
+   публикуют на странице Releases. После этого значок «релиз» в README покажет версию, а workflow «Homebrew and
+   AltStore» заполнит источник AltStore и впишет в формулу версию и контрольную сумму сборки.
+3. **Репозиторий Homebrew** (см. раздел [Homebrew](#homebrew) ниже): создать репозиторий, сделать ключ, добавить его
+   в репозиторий и записать секрет — четыре команды.
+4. **Задачи для новичков:** выбрать задачи в [`docs/starter-issues/`](starter-issues/) и открыть нужные как issues
+   командой оттуда же.
 
 ## Защита ветки `main`
 
@@ -124,3 +139,72 @@ python3 tools/licenses/check.py python
   [`data-governance/exclusions/README.md`](../data-governance/exclusions/README.md).
 - **«Предложение»** (`proposal.yml`).
 - Вопросы — в [Discussions](https://github.com/zigansh1n/velikiy-moguchiy/discussions).
+
+## Homebrew
+
+Mac-приложение ставится одной командой:
+
+```bash
+brew install --cask zigansh1n/tap/velikiy-moguchiy
+```
+
+Формула — [`tools/homebrew/Casks/velikiy-moguchiy.rb`](../tools/homebrew/Casks/velikiy-moguchiy.rb). После
+каждого опубликованного релиза (кроме предварительных, с `-` в теге) workflow «Homebrew and AltStore» скачивает
+`VelikiyMoguchiy-macOS-arm64.zip`, вписывает в формулу версию и SHA-256 (`tools/homebrew/bump.py`), коммитит её в
+`main` и копирует содержимое `tools/homebrew/` в отдельный репозиторий `zigansh1n/homebrew-tap`. Homebrew ищет
+формулы сторонних авторов только в репозиториях с именем `homebrew-…`, поэтому без него не обойтись. Править формулу
+нужно здесь: репозиторий tap перезаписывается.
+
+Сборка подписана только ad hoc, поэтому формула после установки снимает с приложения карантин (`xattr`), как
+советует [`mac/README.md`](../mac/README.md).
+
+Как включить (один раз):
+
+```bash
+gh repo create zigansh1n/homebrew-tap --public --description "Homebrew для «Великий & Могучий»"
+```
+
+```bash
+ssh-keygen -t ed25519 -N "" -C "homebrew-tap-push" -f tap_key
+```
+
+```bash
+gh repo deploy-key add tap_key.pub --allow-write --title "velikiy-moguchiy releases" -R zigansh1n/homebrew-tap
+```
+
+```bash
+gh secret set HOMEBREW_TAP_KEY -R zigansh1n/velikiy-moguchiy < tap_key
+```
+
+Удалите оба файла ключа и запустите Actions → «Homebrew and AltStore» → Run workflow: tap заполнится сразу, не
+дожидаясь следующего релиза. Пока секрета нет, workflow обновляет только формулу в этом репозитории и остаётся
+зелёным.
+
+## AltStore и SideStore
+
+Источник для iPhone — [`docs/altstore/source.json`](altstore/source.json). Его адрес, который вводят в AltStore или
+SideStore («Источники → +»):
+
+```
+https://raw.githubusercontent.com/zigansh1n/velikiy-moguchiy/main/docs/altstore/source.json
+```
+
+Файл собирает [`tools/altstore/source.py`](../tools/altstore/source.py) после каждого опубликованного или удалённого
+релиза: по одной версии на релиз с `VelikiyMoguchiy-iOS-unsigned.ipa` (адрес файла, размер, дата, описание из
+раздела «Что нового» или вступления). Идентификатор приложения, номер сборки, минимальная iOS и тексты разрешений
+берутся из самого IPA, права (entitlements) — из `ios/dist/*.entitlements.plist`. Коммит в `main` идёт через
+deploy key `BOT_PUSH_KEY`, как у статистики. Своих секретов источнику не нужно. Скриншоты пока не добавлены — это
+одна из задач в [`docs/starter-issues/`](starter-issues/).
+
+## Ярлыки и задачи для новичков
+
+Ярлыки «good first issue» и «help wanted» описаны в [`tools/labels/labels.json`](../tools/labels/labels.json) и
+создаются (или обновляются) workflow «Labels» при изменении файла; повторный запуск ничего не ломает, ярлыки не из
+файла он не трогает. Имена ярлыков английские: по ним GitHub и каталоги задач для новичков находят проект. Вручную:
+
+```bash
+python3 tools/labels/sync.py
+```
+
+Задачи для участников — [`docs/starter-issues/`](starter-issues/): следующие шаги для Windows и Android, порт на Linux и
+несколько простых задач. Как открыть одну как issue, написано там же.

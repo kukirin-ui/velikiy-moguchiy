@@ -1,6 +1,15 @@
 <p align="center"><img src="design/readme/banner.svg" width="100%" alt="«Великий &amp; Могучий» — русская голосовая диктовка для Mac и iPhone"><br>
 <sub><i>В. М. Васнецов. «Богатыри» (1881–1898), фрагмент. Общественное достояние, Wikimedia Commons. Рамка, вязь и орнамент — свои.</i></sub></p>
 
+<p align="center">
+  <a href="https://github.com/zigansh1n/velikiy-moguchiy/releases/latest"><img src="https://img.shields.io/github/v/release/zigansh1n/velikiy-moguchiy?label=%D1%80%D0%B5%D0%BB%D0%B8%D0%B7&amp;color=9B3A2C&amp;labelColor=32261E" alt="Последний релиз"></a>
+  <a href="https://github.com/zigansh1n/velikiy-moguchiy/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/zigansh1n/velikiy-moguchiy/tests.yml?branch=main&amp;label=%D0%BF%D1%80%D0%BE%D0%B2%D0%B5%D1%80%D0%BA%D0%B8&amp;labelColor=32261E" alt="Проверки"></a>
+  <a href="https://github.com/zigansh1n/velikiy-moguchiy/actions/workflows/licenses.yml"><img src="https://img.shields.io/github/actions/workflow/status/zigansh1n/velikiy-moguchiy/licenses.yml?branch=main&amp;label=%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D0%B8%20%D0%B7%D0%B0%D0%B2%D0%B8%D1%81%D0%B8%D0%BC%D0%BE%D1%81%D1%82%D0%B5%D0%B9&amp;labelColor=32261E" alt="Лицензии зависимостей"></a>
+  <a href="https://github.com/zigansh1n/velikiy-moguchiy/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/zigansh1n/velikiy-moguchiy/release.yml?label=%D1%81%D0%B1%D0%BE%D1%80%D0%BA%D0%B0%20%D1%80%D0%B5%D0%BB%D0%B8%D0%B7%D0%B0&amp;labelColor=32261E" alt="Сборка релиза"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT-9A7A3C?labelColor=32261E" alt="Лицензия MIT"></a>
+  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fzigansh1n%2Fvelikiy-moguchiy%2Fmain%2Fcontributors.json&amp;query=%24.contributors.length&amp;label=%D1%83%D1%87%D0%B0%D1%81%D1%82%D0%BD%D0%B8%D0%BA%D0%B8&amp;color=6B6433&amp;labelColor=32261E" alt="Участники"></a>
+</p>
+
 <img src="design/readme/initial-r.svg" align="left" width="92" alt="Р">усский голосовой ввод для Mac и iPhone: говорите — и текст появляется там, где стоит курсор.
 Распознаёт, расставляет знаки, при желании правит текст языковой моделью и вставляет его в любое приложение.
 <br clear="left">
@@ -71,7 +80,7 @@ cd velikiy-moguchiy
 | `lipread/` | чтение по губам: запись, оценка, дообучение LoRA, сервис для режима «губы» |
 | `federated/` | протокол, сервер, клиент и симуляция федеративного обучения |
 | `tools/` | служебные инструменты: охранник памяти, статус конвейера, проверки приватности и текстов |
-| `.github/` | `tests.yml` — тесты на каждый PR; `build-apple.yml` — сборка Mac и iOS (по метке `build`, тегу или вручную); `release.yml` — черновик релиза по тегу `v*`; `privacy.yml` и `text-review.yml` — проверка приватности и текстов в каждом PR; `contributors.yml` — таблица участников; шаблоны issue и PR |
+| `.github/` | `tests.yml` — тесты на каждый PR; `build-apple.yml` — сборка Mac и iOS (по метке `build`, тегу или вручную); `release.yml` — черновик релиза по тегу `v*`; `privacy.yml` и `text-review.yml` — проверка приватности и текстов в каждом PR; `stores.yml` — Homebrew и AltStore после релиза; `labels.yml` — ярлыки; `contributors.yml` — таблица участников; шаблоны issue и PR |
 
 <p align="center"><img src="design/readme/divider-band.svg" width="520" alt=""></p>
 

@@ -1,0 +1,36 @@
+name: Labels
+
+# Creates or updates the labels in tools/labels/labels.json (tools/labels/sync.py).
+# Re-running is harmless; labels that are not in the file are never touched.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/labels/**
+      - .github/workflows/labels.yml
+  pull_request:
+    paths:
+      - tools/labels/**
+      - .github/workflows/labels.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync labels
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preview
+        run: python3 tools/labels/sync.py --dry-run
+      - name: Apply
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/labels/sync.py
