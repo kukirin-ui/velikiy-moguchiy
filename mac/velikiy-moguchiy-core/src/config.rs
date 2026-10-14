@@ -2236,6 +2236,7 @@ pub fn ensure_defaults() -> Result<bool> {
     // tightening the mode on every launch in case it was created loosely.
     // Best-effort on the directory itself, but never silently: the file-level
     // 0600 below is the hard line for the secrets themselves.
+    #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         if let Err(e) = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)) {
@@ -2272,6 +2273,7 @@ pub fn ensure_defaults() -> Result<bool> {
     }
 
     // Enforce owner-only mode on a pre-existing config.yaml (contains secrets).
+    #[cfg(unix)]
     if config_file.exists() {
         use std::os::unix::fs::PermissionsExt;
         if let Err(e) =
@@ -2377,6 +2379,7 @@ pub fn atomic_write_config(data: &str) -> Result<()> {
 
 /// Write `data` to `path` with owner-only (0600) permissions, tightening the
 /// mode before any content is written even when the file already exists.
+#[cfg(unix)]
 fn write_owner_only(path: &Path, data: &str) -> std::io::Result<()> {
     use std::io::Write;
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -2388,6 +2391,13 @@ fn write_owner_only(path: &Path, data: &str) -> std::io::Result<()> {
         .open(path)?;
     file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
     file.write_all(data.as_bytes())
+}
+
+/// Windows has no mode bits: the data directory sits in the user profile,
+/// whose ACL already keeps other users out.
+#[cfg(not(unix))]
+fn write_owner_only(path: &Path, data: &str) -> std::io::Result<()> {
+    std::fs::write(path, data)
 }
 
 /// Write data to a file atomically: write to a temp sibling, then rename.
@@ -2878,6 +2888,7 @@ mod tests {
         assert_eq!(lipdata.get("dir").unwrap().as_str(), Some(""));
     }
 
+    #[cfg(unix)]
     #[test]
     fn atomic_write_file_is_owner_only() {
         use std::os::unix::fs::PermissionsExt;

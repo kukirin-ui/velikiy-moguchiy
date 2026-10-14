@@ -13,8 +13,11 @@ pub const DIR_NAME: &str = ".velikiy-moguchiy";
 pub const LEGACY_DIR_NAME: &str = ".koe";
 
 /// `~/.velikiy-moguchiy`, or `~/.koe` when only that one exists.
+/// Windows usually has no `HOME`; the profile folder takes its place there.
 pub fn app_data_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .unwrap_or_else(|| "/tmp".into());
     app_data_dir_in(Path::new(&home))
 }
 
