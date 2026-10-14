@@ -4,16 +4,18 @@
 
 /// Bundle identifier of builds from before the rename (inherited from koe).
 static NSString *const SPLegacyBundleIdentifier = @"nz.owo.koe";
+/// Placeholder identifier of builds from before io.github.zigansh1n.velikiy-moguchiy.
+static NSString *const SPPlaceholderBundleIdentifier = @"com.example.velikiy-moguchiy";
 
-/// Preferences of builds from before the rename live under the old bundle
-/// identifier and partly under old key names. Copy them once, without
-/// overwriting anything already set, so the interface language, the chosen
-/// microphone and "don't remind again" answers survive the rename.
-static void SPImportLegacyPreferences(NSUserDefaults *defaults) {
-    NSString *const importedKey = @"SPLegacyPreferencesImported";
+/// Preferences of earlier builds live under their bundle identifier, and
+/// koe's partly under old key names. Copy them once per old identifier,
+/// without overwriting anything already set, so the interface language, the
+/// chosen microphone and "don't remind again" answers survive.
+static void SPImportPreferencesFrom(NSUserDefaults *defaults, NSString *oldIdentifier, NSString *importedKey) {
     if ([defaults boolForKey:importedKey]) return;
     NSString *bundleIdentifier = [NSBundle mainBundle].bundleIdentifier;
-    NSDictionary<NSString *, id> *legacy = [defaults persistentDomainForName:SPLegacyBundleIdentifier];
+    if ([bundleIdentifier isEqualToString:oldIdentifier]) return;
+    NSDictionary<NSString *, id> *legacy = [defaults persistentDomainForName:oldIdentifier];
     NSDictionary<NSString *, id> *current =
         bundleIdentifier.length > 0 ? [defaults persistentDomainForName:bundleIdentifier] : nil;
     NSString *const legacyDontRemindPrefix = @"KoePermissionDontRemind_";
@@ -24,10 +26,17 @@ static void SPImportLegacyPreferences(NSUserDefaults *defaults) {
         } else if ([key hasPrefix:legacyDontRemindPrefix]) {
             renamed = [@"SPPermissionDontRemind_"
                 stringByAppendingString:[key substringFromIndex:legacyDontRemindPrefix.length]];
+        } else if ([key hasPrefix:@"SPLegacyPreferencesImported"]) {
+            return;
         }
         if (current[renamed] == nil) [defaults setObject:value forKey:renamed];
     }];
     [defaults setBool:YES forKey:importedKey];
+}
+
+static void SPImportLegacyPreferences(NSUserDefaults *defaults) {
+    SPImportPreferencesFrom(defaults, SPLegacyBundleIdentifier, @"SPLegacyPreferencesImported");
+    SPImportPreferencesFrom(defaults, SPPlaceholderBundleIdentifier, @"SPLegacyPreferencesImported.placeholder");
 }
 
 int main(int argc, const char *argv[]) {

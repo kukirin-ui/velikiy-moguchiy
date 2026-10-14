@@ -1,5 +1,5 @@
 // Public defaults for the macOS app. Your own values go into Secrets.xcconfig
 // (git-ignored, see Secrets.xcconfig.example); it is included last and wins.
-MAC_APP_BUNDLE_IDENTIFIER = com.example.velikiy-moguchiy
+MAC_APP_BUNDLE_IDENTIFIER = io.github.zigansh1n.velikiy-moguchiy
 
 #include? "Secrets.xcconfig"
