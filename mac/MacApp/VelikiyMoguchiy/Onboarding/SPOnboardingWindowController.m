@@ -190,17 +190,26 @@ static BOOL recognitionReady(void) {
     fnLine.spacing = 8;
     [sections addObject:fnLine];
 
-    NSScrollView *scroll = [[NSScrollView alloc] init];
+    CGFloat fieldWidth = kWindowWidth - 2 * kContentInset;
+    NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, fieldWidth, 76)];
     scroll.hasVerticalScroller = YES;
     scroll.borderType = NSBezelBorder;
-    self.tryTextView = [[NSTextView alloc] init];
+    NSSize contentSize = scroll.contentSize;
+    self.tryTextView =
+        [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, contentSize.width, contentSize.height)];
+    self.tryTextView.minSize = NSMakeSize(0, contentSize.height);
+    self.tryTextView.maxSize = NSMakeSize(CGFLOAT_MAX, CGFLOAT_MAX);
+    self.tryTextView.verticallyResizable = YES;
+    self.tryTextView.horizontallyResizable = NO;
+    self.tryTextView.autoresizingMask = NSViewWidthSizable;
+    self.tryTextView.textContainer.widthTracksTextView = YES;
+    self.tryTextView.textContainer.containerSize = NSMakeSize(contentSize.width, CGFLOAT_MAX);
     self.tryTextView.font = [NSFont systemFontOfSize:14];
     self.tryTextView.richText = NO;
-    self.tryTextView.autoresizingMask = NSViewWidthSizable;
     self.tryTextView.textContainerInset = NSMakeSize(4, 6);
     scroll.documentView = self.tryTextView;
     [scroll.heightAnchor constraintEqualToConstant:76].active = YES;
-    [scroll.widthAnchor constraintEqualToConstant:kWindowWidth - 2 * kContentInset].active = YES;
+    [scroll.widthAnchor constraintEqualToConstant:fieldWidth].active = YES;
     [sections addObject:scroll];
     [NSNotificationCenter.defaultCenter addObserver:self
                                            selector:@selector(tryTextChanged:)
@@ -316,6 +325,19 @@ static BOOL recognitionReady(void) {
     self.fnWarning.stringValue = conflict ? [NSString stringWithFormat:@"Сейчас 🌐 при нажатии ещё и %@.", conflict] : @"";
     self.fnWarning.hidden = conflict == nil;
     self.fnWarningButton.hidden = conflict == nil;
+    [self fitWindowToContent];
+}
+
+/// Texts and buttons come and go with the state; the window keeps its top edge.
+- (void)fitWindowToContent {
+    NSView *content = self.window.contentView;
+    [content layoutSubtreeIfNeeded];
+    NSSize fitting = content.fittingSize;
+    if (fabs(fitting.height - NSHeight(content.frame)) < 1) return;
+    NSRect frame = [self.window frameRectForContentRect:NSMakeRect(0, 0, fitting.width, fitting.height)];
+    frame.origin.x = NSMinX(self.window.frame);
+    frame.origin.y = NSMaxY(self.window.frame) - NSHeight(frame);
+    [self.window setFrame:frame display:YES];
 }
 
 - (void)tryTextChanged:(NSNotification *)notification {
@@ -377,7 +399,6 @@ static BOOL recognitionReady(void) {
 
 - (void)present {
     [self refresh];
-    [self.window layoutIfNeeded];
     [self.window center];
     [self.window makeKeyAndOrderFront:nil];
     [NSApp activateIgnoringOtherApps:YES];
