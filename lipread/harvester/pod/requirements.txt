@@ -8,7 +8,7 @@ opencv-python-headless==4.12.0.88
 scipy==1.16.0
 pandas
 tqdm==4.67.1
-pillow==11.3.0
+pillow==12.3.0
 yt-dlp[default]
 hydra-core==1.3.*
 omegaconf==2.3.*
