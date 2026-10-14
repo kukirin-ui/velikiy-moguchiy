@@ -2,11 +2,13 @@
 
   python exam_features.py --raw DIR --venc VENC.pth --lipread ../lipread --out EXAM_DIR [--limit 120]
 
-DIR — копия raw/ закрытого датасета экзамена: exam_raw.jsonl ({"id", "file", "text", "speaker"} на строку) и сами
-клипы. Только публичные клипы (MuAViC-ru); записей автора проекта в экзамене нет. Кадры лица — как у участников
-(lipread/preprocess.py, детектор на каждом 5-м кадре), признаки — визуальной частью lips-0.1 (VENC, загрузка
-только weights_only=True). Выбор клипов поровну по говорящим, всегда один и тот же. Пишет exam.jsonl и feats/
-в формате aggregator/exam.py; в журнал попадают только числа.
+DIR — копия raw/ закрытого датасета экзамена: exam_raw.jsonl ({"id", "file", "text", "speaker", "raw"} на строку) и
+сами клипы. Только публичные клипы (MuAViC-ru); записей автора проекта в экзамене нет. Клип с "raw": false — уже
+кроп лица 224x224 (так нарезан MuAViC-ru) и идёт прямо в визуальную часть; исходное видео ("raw": true или поля нет)
+сначала режется по лицу, как у участников (lipread/preprocess.py, детектор на каждом 5-м кадре). Признаки —
+визуальной частью lips-0.1 (VENC, загрузка только weights_only=True). Выбор клипов поровну по говорящим, всегда
+один и тот же. Пишет exam.jsonl и feats/ в формате aggregator/exam.py; в журнал попадают только числа и причины
+отказа без текстов.
 """
 from __future__ import annotations
 
@@ -65,26 +67,33 @@ def main() -> int:
 
     out = Path(a.out)
     (out / "feats").mkdir(parents=True, exist_ok=True)
-    lines, skipped = [], 0
+    lines, skipped, reasons = [], 0, []
     with tempfile.TemporaryDirectory() as td:
         for k, r in enumerate(rows, 1):
-            face = Path(td) / f"{k}.avi"
-            try:
-                preprocess_video(str(raw / r["file"]), str(face), det_every=DET_EVERY)
-            except Exception:  # noqa: BLE001  (no face found: the clip is left out)
-                skipped += 1
-                continue
+            face = raw / r["file"]
+            if r.get("raw", True):
+                face = Path(td) / f"{k}.avi"
+                try:
+                    preprocess_video(str(raw / r["file"]), str(face), det_every=DET_EVERY)
+                except Exception as e:  # noqa: BLE001  (no face found: the clip is left out)
+                    skipped += 1
+                    if len(reasons) < 3:
+                        reasons.append(f"{type(e).__name__}: {str(e)[:160]}")
+                    continue
             faces = mvsr.read_faces(face)
             with torch.inference_mode():
                 parts = [venc(faces[:, :, i:i + CHUNK_FRAMES])[0].float() for i in range(0, faces.size(2), CHUNK_FRAMES)]
             feats = torch.cat(parts, 0).numpy().astype(np.float16)
             np.save(out / "feats" / f"{r['id']}.npy", feats)
             lines.append(json.dumps({"id": r["id"], "text": r["text"], "feats": f"feats/{r['id']}.npy"}, ensure_ascii=False))
-            face.unlink(missing_ok=True)
+            if r.get("raw", True):
+                face.unlink(missing_ok=True)
             if k % 20 == 0:
                 print(f"признаки: {k}/{len(rows)}", flush=True)
     (out / "exam.jsonl").write_text("\n".join(lines) + "\n", encoding="utf8")
     print(f"экзамен: {len(lines)} клипов, без лица {skipped}", flush=True)
+    for why in reasons:
+        print(f"  причина: {why}", flush=True)
     return 0 if lines else 1
 
 

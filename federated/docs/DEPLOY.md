@@ -64,7 +64,8 @@ GitHub Actions (детектор лица из кода MultiVSR и визуал
 `aggregator/exam_features.py`, по умолчанию 120 клипов поровну по говорящим):
 
 ```
-raw/exam_raw.jsonl  {"id": ..., "file": "<имя клипа>", "text": "<эталон>", "speaker": "<говорящий>"} на строку
+raw/exam_raw.jsonl  {"id": ..., "file": "<имя клипа>", "text": "<эталон>", "speaker": "<говорящий>", "raw": false} на строку
+                    ("raw": false — клип уже вырезан по лицу, как в MuAViC-ru; true — исходное видео)
 raw/<клип>.mp4
 ```
 
