@@ -54,7 +54,7 @@
 
 /* ─── 权限弹窗 ─── */
 "permission.microphone.title" = "需要麦克风权限";
-"permission.microphone.message" = "Velikiy Moguchiy 需要麦克风权限来采集语音进行语音输入。\n\n请前往 系统设置 → 隐私与安全性 → 麦克风 中授权。";
+"permission.microphone.message" = "Velikiy Moguchiy 需要麦克风权限来采集语音进行语音输入。\n\n请前往 系统设置 → 隐私与安全性 → 麦克风 中授权。无需重启应用，授权后会自动生效。";
 "permission.accessibility.title" = "需要辅助功能权限";
 "permission.accessibility.message" = "Velikiy Moguchiy 需要辅助功能权限来将校正后的文字粘贴到当前应用。\n\n未授权时，文字会复制到剪贴板但无法自动粘贴。\n\n请前往 系统设置 → 隐私与安全性 → 辅助功能 中授权。";
 "permission.inputMonitoring.title" = "需要输入监控权限";

@@ -7,13 +7,18 @@
 #import <UserNotifications/UserNotifications.h>
 
 static NSString *const kDontRemindPrefix = @"SPPermissionDontRemind_";
+static NSString *const kWasGrantedPrefix = @"SPPermissionWasGranted_";
 
 @implementation SPPermissionManager
 
 - (void)checkAllPermissionsWithCompletion:(SPPermissionCheckCompletion)completion {
+    [self checkAllPermissionsPromptingAccessibility:YES completion:completion];
+}
+
+- (void)checkAllPermissionsPromptingAccessibility:(BOOL)prompt completion:(SPPermissionCheckCompletion)completion {
     // Check microphone permission (async)
     [self requestMicrophonePermissionWithCompletion:^(BOOL micGranted) {
-        [self requestAccessibilityPermission];
+        if (prompt) [self requestAccessibilityPermission];
         BOOL accessibility = [self isAccessibilityGranted];
         BOOL inputMonitoring = [self isInputMonitoringGranted];
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -38,6 +43,10 @@ static NSString *const kDontRemindPrefix = @"SPPermissionDontRemind_";
 
 - (BOOL)isMicrophoneGranted {
     return [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] == AVAuthorizationStatusAuthorized;
+}
+
+- (BOOL)isMicrophoneUndetermined {
+    return [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] == AVAuthorizationStatusNotDetermined;
 }
 
 - (BOOL)isCameraGranted {
@@ -202,6 +211,97 @@ static CGEventRef inputMonitoringProbeCallback(CGEventTapProxy proxy,
     }
 
     return YES;
+}
+
+#pragma mark - Grants lost after an update
+
++ (NSURL *)settingsURLForType:(SPPermissionType)type {
+    NSString *anchor = @"Privacy_Microphone";
+    switch (type) {
+        case SPPermissionTypeMicrophone: anchor = @"Privacy_Microphone"; break;
+        case SPPermissionTypeAccessibility: anchor = @"Privacy_Accessibility"; break;
+        case SPPermissionTypeInputMonitoring: anchor = @"Privacy_ListenEvent"; break;
+        case SPPermissionTypeSpeechRecognition: anchor = @"Privacy_SpeechRecognition"; break;
+    }
+    return [NSURL URLWithString:[@"x-apple.systempreferences:com.apple.preference.security?"
+                                    stringByAppendingString:anchor]];
+}
+
+- (NSString *)wasGrantedKeyForType:(SPPermissionType)type {
+    return [NSString stringWithFormat:@"%@%ld", kWasGrantedPrefix, (long)type];
+}
+
+- (void)rememberGrantedPermissions {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    if ([self isMicrophoneGranted]) [defaults setBool:YES forKey:[self wasGrantedKeyForType:SPPermissionTypeMicrophone]];
+    if ([self isAccessibilityGranted]) [defaults setBool:YES forKey:[self wasGrantedKeyForType:SPPermissionTypeAccessibility]];
+    if ([self isInputMonitoringGranted]) {
+        [defaults setBool:YES forKey:[self wasGrantedKeyForType:SPPermissionTypeInputMonitoring]];
+    }
+}
+
+- (NSArray<NSNumber *> *)lostPermissionTypes {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSMutableArray<NSNumber *> *lost = [NSMutableArray array];
+    if ([defaults boolForKey:[self wasGrantedKeyForType:SPPermissionTypeAccessibility]] &&
+        ![self isAccessibilityGranted]) {
+        [lost addObject:@(SPPermissionTypeAccessibility)];
+    }
+    if ([defaults boolForKey:[self wasGrantedKeyForType:SPPermissionTypeInputMonitoring]] &&
+        ![self isInputMonitoringGranted]) {
+        [lost addObject:@(SPPermissionTypeInputMonitoring)];
+    }
+    AVAuthorizationStatus mic = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+    if ([defaults boolForKey:[self wasGrantedKeyForType:SPPermissionTypeMicrophone]] &&
+        (mic == AVAuthorizationStatusDenied || mic == AVAuthorizationStatusRestricted)) {
+        [lost addObject:@(SPPermissionTypeMicrophone)];
+    }
+    return lost;
+}
+
+static NSString *SPPermissionTitle(SPPermissionType type) {
+    switch (type) {
+        case SPPermissionTypeMicrophone: return @"«Микрофон»";
+        case SPPermissionTypeAccessibility: return @"«Универсальный доступ»";
+        case SPPermissionTypeInputMonitoring: return @"«Мониторинг ввода»";
+        case SPPermissionTypeSpeechRecognition: return @"«Распознавание речи»";
+    }
+    return @"";
+}
+
+- (void)showLostAccessAlertForTypes:(NSArray<NSNumber *> *)types {
+    if (types.count == 0) return;
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    for (NSNumber *type in types) [names addObject:SPPermissionTitle((SPPermissionType)type.integerValue)];
+    SPPermissionType first = (SPPermissionType)types.firstObject.integerValue;
+    NSString *list = [names componentsJoinedByString:@" и "];
+
+    [NSApp activateIgnoringOtherApps:YES];
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.alertStyle = NSAlertStyleWarning;
+    alert.messageText = @"macOS сбросила доступ после обновления";
+    NSMutableString *text = [NSMutableString stringWithFormat:
+        @"Раньше у «Великого & Могучего» %@ %@, а у этой версии нет. Так бывает после обновления: "
+        @"галочка в Системных настройках может стоять, но относится к прежней версии.\n\nЧто сделать:",
+        types.count > 1 ? @"были разрешения" : @"было разрешение", list];
+    BOOL listed = [types containsObject:@(SPPermissionTypeAccessibility)] ||
+                  [types containsObject:@(SPPermissionTypeInputMonitoring)];
+    if (listed) {
+        [text appendString:@" в списке выделите «Великий & Могучий», удалите его кнопкой «−» и добавьте заново "
+                           @"кнопкой «+» из папки «Программы»."];
+    }
+    if ([types containsObject:@(SPPermissionTypeMicrophone)]) {
+        [text appendString:listed ? @" В разделе «Микрофон» включите переключатель «Великий & Могучий»."
+                                  : @" в разделе «Микрофон» включите переключатель «Великий & Могучий»."];
+    }
+    [text appendString:@" Приложение подхватит доступ само; если клавиша не заработает через несколько секунд, "
+                       @"перезапустите его."];
+    alert.informativeText = text;
+    [alert addButtonWithTitle:SPLocalizedString(@"permission.button.openSettings")];
+    [alert addButtonWithTitle:@"Позже"];
+    if ([alert runModal] == NSAlertFirstButtonReturn) {
+        [[NSWorkspace sharedWorkspace] openURL:[SPPermissionManager settingsURLForType:first]];
+    }
 }
 
 @end

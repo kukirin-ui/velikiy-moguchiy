@@ -112,6 +112,11 @@
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSDate *> *warningShownAt;
 // A message that waits for the pill to finish the result of the session.
 @property (nonatomic, strong) SPErrorExplanation *pendingPillMessage;
+// Polls the permissions while one is missing, so granting it later needs no restart.
+@property (nonatomic, strong) NSTimer *permissionWatchTimer;
+@property (nonatomic, assign) BOOL watchedAccessibilityGranted;
+@property (nonatomic, assign) BOOL watchedInputMonitoringGranted;
+@property (nonatomic, assign) BOOL hotkeyRestartPending;
 @property (nonatomic, assign) SPSessionPurpose pendingSessionPurpose;
 @property (nonatomic, assign) SPSessionPurpose sessionPurpose;
 // Session result metadata delivered just before the final text; consumed
@@ -358,6 +363,9 @@ static BOOL SPLabFlag(const char *name) {
 }
 
 - (void)applyDeferredConfigReloadIfNeeded {
+    if (self.hotkeyRestartPending && sessionStateAllowsConfigReload(self.sessionState)) {
+        [self checkWatchedPermissions];
+    }
     if (!self.hasPendingConfigReload) return;
     if (!sessionStateAllowsConfigReload(self.sessionState)) return;
 
@@ -537,18 +545,14 @@ static BOOL SPLabFlag(const char *name) {
         sp_core_free_string(rawProvider);
     }
 
-    // Check permissions
-    [self.permissionManager checkAllPermissionsWithCompletion:^(BOOL micGranted, BOOL accessibilityGranted, BOOL inputMonitoringGranted) {
-        NSLog(@"[VelikiyMoguchiy] Permissions — mic:%d accessibility:%d inputMonitoring:%d",
-              micGranted, accessibilityGranted, inputMonitoringGranted);
-
-        if (!micGranted) {
-            NSLog(@"[VelikiyMoguchiy] ERROR: Microphone permission not granted");
-            [self.cuePlayer playError];
-            [self.permissionManager showPermissionAlertForType:SPPermissionTypeMicrophone
-                                                  settingsURL:[NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"]];
-            return;
-        }
+    // Check permissions. Nothing below waits for them: a permission granted
+    // later is picked up by the permission watch without a restart.
+    NSArray<NSNumber *> *lostPermissions = [self.permissionManager lostPermissionTypes];
+    BOOL accessibilityLost = [lostPermissions containsObject:@(SPPermissionTypeAccessibility)];
+    [self.permissionManager checkAllPermissionsPromptingAccessibility:!accessibilityLost
+                                                           completion:^(BOOL micGranted, BOOL accessibilityGranted, BOOL inputMonitoringGranted) {
+        NSLog(@"[VelikiyMoguchiy] Permissions — mic:%d accessibility:%d inputMonitoring:%d lost:%@",
+              micGranted, accessibilityGranted, inputMonitoringGranted, lostPermissions);
 
         // No app-level alerts for Accessibility / Input Monitoring at launch:
         // macOS shows its own Input Monitoring prompt when the event tap
@@ -563,13 +567,10 @@ static BOOL SPLabFlag(const char *name) {
 
         // Build the queue after TCC confirms microphone access, but do not
         // start hardware yet. The trigger-down path starts this prepared queue.
-        if (SPLabFlag("VELIKIY_MOGUCHIY_LAB_NO_AUDIO")) {
-            NSLog(@"[VelikiyMoguchiy] LAB: audio queue preparation disabled");
+        if (micGranted) {
+            [self enableAudioPreparation];
         } else {
-            self.audioPreparationEnabled = YES;
-            if (![self prepareAudioQueueForResolvedDevice]) {
-                NSLog(@"[VelikiyMoguchiy] Initial audio queue preparation failed; trigger-down will retry");
-            }
+            NSLog(@"[VelikiyMoguchiy] Microphone permission not granted; audio waits for it");
         }
 
         // Start hotkey monitor (let it try CGEventTap directly — the probe may give false negatives)
@@ -589,8 +590,113 @@ static BOOL SPLabFlag(const char *name) {
 
         // Start watching config file for hotkey changes
         [self startConfigWatcher];
+
+        [self.permissionManager rememberGrantedPermissions];
+        self.watchedAccessibilityGranted = accessibilityGranted;
+        self.watchedInputMonitoringGranted = inputMonitoringGranted;
+        if (!micGranted || !accessibilityGranted || !inputMonitoringGranted) {
+            [self startPermissionWatch];
+        }
+
+        // Alerts are modal: shown once everything above is running.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (lostPermissions.count > 0) {
+                [self.permissionManager showLostAccessAlertForTypes:lostPermissions];
+            } else if (!micGranted) {
+                [self.cuePlayer playError];
+                [self.permissionManager showPermissionAlertForType:SPPermissionTypeMicrophone
+                                                       settingsURL:[SPPermissionManager settingsURLForType:SPPermissionTypeMicrophone]];
+            }
+        });
     }];
 
+}
+
+- (void)enableAudioPreparation {
+    if (self.audioPreparationEnabled) return;
+    if (SPLabFlag("VELIKIY_MOGUCHIY_LAB_NO_AUDIO")) {
+        NSLog(@"[VelikiyMoguchiy] LAB: audio queue preparation disabled");
+        return;
+    }
+    self.audioPreparationEnabled = YES;
+    if (![self prepareAudioQueueForResolvedDevice]) {
+        NSLog(@"[VelikiyMoguchiy] Initial audio queue preparation failed; trigger-down will retry");
+    }
+}
+
+#pragma mark - Permissions granted after launch
+
+/// While a permission is missing: the microphone, once allowed, gets its audio
+/// queue; a new Accessibility or Input Monitoring grant rebuilds the hotkey
+/// monitors, whose event tap could not be created without it.
+- (void)startPermissionWatch {
+    if (self.permissionWatchTimer) return;
+    __weak typeof(self) weakSelf = self;
+    self.permissionWatchTimer = [NSTimer scheduledTimerWithTimeInterval:3.0
+                                                                repeats:YES
+                                                                  block:^(NSTimer *timer) {
+        [weakSelf checkWatchedPermissions];
+    }];
+}
+
+- (void)checkWatchedPermissions {
+    if (self.quitting) return;
+    BOOL mic = [self.permissionManager isMicrophoneGranted];
+    BOOL accessibility = [self.permissionManager isAccessibilityGranted];
+    BOOL inputMonitoring = [self.permissionManager isInputMonitoringGranted];
+    if (mic && !self.audioPreparationEnabled) {
+        NSLog(@"[VelikiyMoguchiy] Microphone access granted; preparing audio");
+        [self enableAudioPreparation];
+    }
+    if ((accessibility && !self.watchedAccessibilityGranted) ||
+        (inputMonitoring && !self.watchedInputMonitoringGranted)) {
+        NSLog(@"[VelikiyMoguchiy] Accessibility / Input Monitoring granted; restarting the hotkey monitors");
+        self.hotkeyRestartPending = YES;
+    }
+    self.watchedAccessibilityGranted = accessibility;
+    self.watchedInputMonitoringGranted = inputMonitoring;
+    if (self.hotkeyRestartPending && sessionStateAllowsConfigReload(self.sessionState)) {
+        self.hotkeyRestartPending = NO;
+        [self restartHotkeyMonitors];
+    }
+    if (mic && accessibility && inputMonitoring && !self.hotkeyRestartPending) {
+        [self.permissionManager rememberGrantedPermissions];
+        [self.permissionWatchTimer invalidate];
+        self.permissionWatchTimer = nil;
+    }
+}
+
+- (void)restartHotkeyMonitors {
+    if (!self.hotkeyMonitor) return;
+    [self.hotkeyMonitor stop];
+    [self.hotkeyMonitor start];
+    [self rebuildExtraHotkeyMonitors];
+}
+
+/// The trigger fired while the microphone is not allowed: no session starts,
+/// and the pill and a notification say where to allow it. YES when refused.
+- (BOOL)refuseTriggerWithoutMicrophone {
+    if ([self.permissionManager isMicrophoneGranted]) return NO;
+    NSLog(@"[VelikiyMoguchiy] Trigger without microphone access; no session started");
+    [self.audioCaptureManager cancelPreCapture];
+    [self discardArmedLipClip];
+    [self resetAllHotkeyMonitorsToIdle];
+    self.pendingSessionPurpose = SPSessionPurposeDictate;
+    [self.cuePlayer playError];
+    [self startPermissionWatch];
+    if ([self.permissionManager isMicrophoneUndetermined]) {
+        [self.permissionManager requestMicrophonePermissionWithCompletion:^(BOOL granted) {}];
+        return YES;
+    }
+    SPErrorExplanation *explanation =
+        [SPErrorExplainer explanationWithKind:SPErrorKindMicrophone
+                                    shortText:@"Нет доступа к микрофону"
+                                       detail:@"Разрешите его: Системные настройки → Конфиденциальность → Микрофон → "
+                                              @"«Великий & Могучий». Перезапускать приложение не нужно."
+                                       action:SPErrorActionMicrophonePrivacy];
+    [self.overlayPanel showMessage:explanation.shortText icon:SPOverlayMessageIconError];
+    [self sendErrorNotificationForExplanation:explanation];
+    return YES;
 }
 
 #pragma mark - Updates and first-run offers
@@ -1009,6 +1115,8 @@ static BOOL SPLabFlag(const char *name) {
 }
 
 - (void)beginTriggerForPurpose:(SPSessionPurpose)purpose {
+    // Without the microphone the hold / tap decision only explains why nothing starts.
+    if (![self.permissionManager isMicrophoneGranted]) return;
     // This callback occurs on the initial key-down, before the 180ms hold/tap
     // decision. Starting the already-prepared queue here makes the microphone
     // privacy indicator and Bluetooth route activation begin immediately.
@@ -1094,6 +1202,7 @@ static BOOL SPLabFlag(const char *name) {
 
 - (void)hotkeyMonitorDidDetectHoldStart {
     NSLog(@"[VelikiyMoguchiy] Hold start detected");
+    if ([self refuseTriggerWithoutMicrophone]) return;
     [self deactivateRawAsrFallbackInteraction];
     [self.audioCaptureManager logActivationMilestone:@"hold decision"];
     [self stopNumberKeyMonitoring];
@@ -1152,6 +1261,7 @@ static BOOL SPLabFlag(const char *name) {
 
 - (void)hotkeyMonitorDidDetectTapStart {
     NSLog(@"[VelikiyMoguchiy] Tap start detected");
+    if ([self refuseTriggerWithoutMicrophone]) return;
     [self deactivateRawAsrFallbackInteraction];
     [self.audioCaptureManager logActivationMilestone:@"tap decision"];
     [self stopNumberKeyMonitoring];

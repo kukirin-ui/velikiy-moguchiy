@@ -13,7 +13,14 @@ typedef NS_ENUM(NSInteger, SPPermissionType) {
 @interface SPPermissionManager : NSObject
 
 - (void)checkAllPermissionsWithCompletion:(SPPermissionCheckCompletion)completion;
+/// Same, without the system's Accessibility prompt (it cannot help when the
+/// grant was lost to an update, see lostPermissionTypes).
+- (void)checkAllPermissionsPromptingAccessibility:(BOOL)prompt completion:(SPPermissionCheckCompletion)completion;
 - (BOOL)isMicrophoneGranted;
+/// The user has not answered the microphone prompt yet.
+- (BOOL)isMicrophoneUndetermined;
+/// Asks for the microphone (the system prompt when undetermined); completion on any queue.
+- (void)requestMicrophonePermissionWithCompletion:(void (^)(BOOL granted))completion;
 - (BOOL)isCameraGranted;
 - (BOOL)isAccessibilityGranted;
 - (void)requestAccessibilityPermission;
@@ -42,5 +49,20 @@ typedef NS_ENUM(NSInteger, SPPermissionType) {
 
 /// Reset the "don't remind again" flag for a specific permission.
 - (void)resetDontRemindForType:(SPPermissionType)type;
+
+/// System Settings → Privacy at the pane of `type`.
++ (NSURL *)settingsURLForType:(SPPermissionType)type;
+
+/// Remembers which of microphone, Accessibility and Input Monitoring are
+/// granted now, so a later launch can tell a lost grant from one never given.
+- (void)rememberGrantedPermissions;
+
+/// Permissions this Mac granted to the app before and does not grant now:
+/// after an update macOS can keep the checkmark for the previous build while
+/// refusing this one. A microphone the system will simply ask for again is not lost.
+- (NSArray<NSNumber *> *)lostPermissionTypes;
+
+/// Explains lost grants and offers the System Settings pane of the first one.
+- (void)showLostAccessAlertForTypes:(NSArray<NSNumber *> *)types;
 
 @end

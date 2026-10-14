@@ -54,7 +54,7 @@
 
 /* ─── Permissions Alerts ─── */
 "permission.microphone.title" = "Microphone Access Required";
-"permission.microphone.message" = "Velikiy Moguchiy needs microphone access to capture your speech for voice input.\n\nPlease grant Microphone permission in System Settings → Privacy & Security → Microphone.";
+"permission.microphone.message" = "Velikiy Moguchiy needs microphone access to capture your speech for voice input.\n\nPlease grant Microphone permission in System Settings → Privacy & Security → Microphone. No restart is needed: the app picks the permission up by itself.";
 "permission.accessibility.title" = "Accessibility Access Required";
 "permission.accessibility.message" = "Velikiy Moguchiy needs Accessibility permission to paste corrected text into your active app.\n\nWithout this, text will be copied to the clipboard but not auto-pasted.\n\nPlease grant access in System Settings → Privacy & Security → Accessibility.";
 "permission.inputMonitoring.title" = "Input Monitoring Required";
