@@ -5,8 +5,7 @@
 /// exists, so existing settings and API keys survive. Must agree with
 /// velikiy_moguchiy_asr::app_dir in the Rust core, which reads the same config.
 /// Never create the new directory by hand: that would hide the legacy one.
-static inline NSString *SPAppDataDirectory(void) {
-    NSString *home = NSHomeDirectory();
+static inline NSString *SPAppDataDirectoryInHome(NSString *home) {
     NSString *current = [home stringByAppendingPathComponent:@".velikiy-moguchiy"];
     NSString *legacy = [home stringByAppendingPathComponent:@".koe"];
     NSFileManager *fm = [NSFileManager defaultManager];
@@ -16,6 +15,10 @@ static inline NSString *SPAppDataDirectory(void) {
         return legacy;
     }
     return current;
+}
+
+static inline NSString *SPAppDataDirectory(void) {
+    return SPAppDataDirectoryInHome(NSHomeDirectory());
 }
 
 /// A file or folder inside SPAppDataDirectory().

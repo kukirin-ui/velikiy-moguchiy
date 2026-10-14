@@ -20,6 +20,10 @@
 #import "SPLipCaptureManager.h"
 #import "SPLipsPolicy.h"
 #import "SPLipsService.h"
+#import "SPLipsRuntime.h"
+#import "SPLocalAsrOffer.h"
+#import "SPAppUpdateChecker.h"
+#import "SPProblemReportWindowController.h"
 #import "SPRecentDictationsWindowController.h"
 #import "SPSetupWizardWindowController.h"
 #import "SPLocalization.h"
@@ -96,6 +100,9 @@
 @property (nonatomic, strong) SPLipsHotkeyProxy *lipsHotkeyProxy;
 @property (nonatomic, strong) SPLipClip *lipsClip;
 @property (nonatomic, assign) BOOL lipsBusy;
+@property (nonatomic, copy) NSString *pendingLipsModelTag;
+@property (nonatomic, strong) SPLocalAsrOffer *localAsrOffer;
+@property (nonatomic, strong) SPProblemReportWindowController *problemReport;
 @property (nonatomic, strong) SPHotkeyPurposeProxy *mouseHotkeyProxy;
 @property (nonatomic, strong) NSTimer *silenceStopTimer;
 @property (nonatomic, assign) SPSessionPurpose pendingSessionPurpose;
@@ -496,6 +503,9 @@ static BOOL SPLabFlag(const char *name) {
     self.overlayPanel = [[SPOverlayPanel alloc] init];
     self.overlayPanel.delegate = self;
 
+    [SPLipsRuntime sharedRuntime].rustBridge = self.rustBridge;
+    [self startUpdateAndSetupChecks];
+
     // Request notification permission
     [self.permissionManager requestNotificationPermission];
 
@@ -568,6 +578,58 @@ static BOOL SPLabFlag(const char *name) {
         [self startConfigWatcher];
     }];
 
+}
+
+#pragma mark - Updates and first-run offers
+
+- (void)startUpdateAndSetupChecks {
+    __weak typeof(self) weakSelf = self;
+    self.localAsrOffer = [[SPLocalAsrOffer alloc] initWithRustBridge:self.rustBridge];
+    self.localAsrOffer.configChangedHandler = ^{
+        [weakSelf reloadConfigAndApplyHotkeyIfSafe];
+    };
+    self.localAsrOffer.openSettingsHandler = ^{
+        [weakSelf statusBarDidSelectSetupWizard];
+    };
+    // After the launch has settled, so the offer does not land on top of the permission prompts.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (!weakSelf.quitting && sessionStateAllowsConfigReload(weakSelf.sessionState)) {
+            [weakSelf.localAsrOffer offerIfNeeded];
+        }
+    });
+    [SPAppUpdateChecker checkIfDueWithHandler:^(NSString *version, NSURL *page, BOOL isNew) {
+        [weakSelf.statusBarManager showAppUpdateVersion:version];
+        if (isNew) {
+            [weakSelf showInfoMessage:[NSString stringWithFormat:@"Доступна новая версия %@: ссылка в меню приложения", version]];
+        }
+    }];
+    if (configFlagEnabled("experimental.lips")) {
+        [[SPLipsRuntime sharedRuntime] checkForModelUpdateWithHandler:^(NSString *tag) {
+            weakSelf.pendingLipsModelTag = tag;
+            [weakSelf.statusBarManager showLipsModelUpdate:tag];
+            [weakSelf showInfoMessage:[NSString stringWithFormat:@"Есть новая модель губ %@: обновить можно в меню", tag]];
+        }];
+    }
+}
+
+- (void)statusBarDidSelectAppUpdate {
+    [[NSWorkspace sharedWorkspace] openURL:[SPAppUpdateChecker knownReleasePage]];
+}
+
+- (void)statusBarDidSelectLipsModelUpdate {
+    NSString *tag = self.pendingLipsModelTag;
+    if (!tag) return;
+    __weak typeof(self) weakSelf = self;
+    [[SPLipsRuntime sharedRuntime] offerModelUpdate:tag completion:^(BOOL updated) {
+        if (!updated) return;
+        weakSelf.pendingLipsModelTag = nil;
+        [weakSelf.statusBarManager showLipsModelUpdate:nil];
+    }];
+}
+
+- (void)statusBarDidSelectReportProblem {
+    if (!self.problemReport) self.problemReport = [[SPProblemReportWindowController alloc] init];
+    [self.problemReport present];
 }
 
 #pragma mark - Extra hotkeys (translate, ask)
@@ -2429,6 +2491,15 @@ static BOOL SPLabFlag(const char *name) {
 /// the press is still being classified, and the service starts loading the model.
 - (void)lipsKeyDown {
     if (self.quitting || self.lipsClip || self.lipsBusy) return;
+    SPLipsRuntime *runtime = [SPLipsRuntime sharedRuntime];
+    if (![runtime isReady]) {
+        // Not from inside the hotkey callback: the offer is a modal alert. The
+        // key-up that follows finds no clip and does nothing.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [runtime offerSetupWithCompletion:nil];
+        });
+        return;
+    }
     if (!sessionStateAllowsConfigReload(self.sessionState)) {
         NSLog(@"[VelikiyMoguchiy] lips: ignored, a dictation is running (state=%@)", self.sessionState);
         return;

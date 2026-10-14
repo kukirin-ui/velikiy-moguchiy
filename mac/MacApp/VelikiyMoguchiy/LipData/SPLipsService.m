@@ -1,5 +1,6 @@
 #import "SPLipsService.h"
 #import "SPLipsPolicy.h"
+#import "SPLipsRuntime.h"
 #import "velikiy_moguchiy_core.h"
 #import "SPAppPaths.h"
 
@@ -61,18 +62,7 @@ static BOOL configFlag(const char *keyPath, BOOL defaultValue) {
 }
 
 + (NSString *)lipreadDirectory {
-    NSString *dir = [configString("lips.service_dir") stringByExpandingTildeInPath];
-    if (dir.length == 0) {
-        // The folder was lipread-ru before the monorepo layout; keep using such a checkout.
-        dir = [NSHomeDirectory() stringByAppendingPathComponent:@"velikiy-moguchiy/lipread"];
-        NSString *legacy = [NSHomeDirectory() stringByAppendingPathComponent:@"velikiy-moguchiy/lipread-ru"];
-        BOOL isDir = NO;
-        if (![[NSFileManager defaultManager] fileExistsAtPath:dir]
-            && [[NSFileManager defaultManager] fileExistsAtPath:legacy isDirectory:&isDir] && isDir) {
-            dir = legacy;
-        }
-    }
-    return dir.stringByStandardizingPath;
+    return [[SPLipsRuntime sharedRuntime] serviceDirectory];
 }
 
 - (NSURL *)urlForPath:(NSString *)path {
@@ -136,6 +126,11 @@ static BOOL configFlag(const char *keyPath, BOOL defaultValue) {
 
 /// On _queue.
 - (NSString *)launch {
+    SPLipsRuntime *runtime = [SPLipsRuntime sharedRuntime];
+    if (![runtime isReady]) {
+        NSLog(@"[VelikiyMoguchiy] lips: the lips mode is not installed yet");
+        return @"Режим губ ещё не установлен";
+    }
     NSString *dir = [self serviceDirectory];
     NSString *python = [dir stringByAppendingPathComponent:@".venv/bin/python"];
     NSString *script = [dir stringByAppendingPathComponent:@"lips_service.py"];
@@ -162,8 +157,12 @@ static BOOL configFlag(const char *keyPath, BOOL defaultValue) {
     NSMutableDictionary *environment = [[[NSProcessInfo processInfo] environment] mutableCopy];
     environment[@"PYTHONUNBUFFERED"] = @"1";
     environment[@"PYTHONIOENCODING"] = @"utf-8";
+    // Lets memguard tell the user's own lips service from a development ML run (RULES.md R11).
+    environment[@"VELIKIY_MOGUCHIY_APP_JOB"] = @"lips-service";
     // ffmpeg for the face crop; GUI apps do not inherit the shell's PATH.
-    environment[@"PATH"] = [@"/opt/homebrew/bin:/usr/local/bin:" stringByAppendingString:environment[@"PATH"] ?: @"/usr/bin:/bin"];
+    NSString *path = [@"/opt/homebrew/bin:/usr/local/bin:" stringByAppendingString:environment[@"PATH"] ?: @"/usr/bin:/bin"];
+    NSString *bin = [runtime binDirectory];
+    environment[@"PATH"] = bin ? [NSString stringWithFormat:@"%@:%@", bin, path] : path;
     task.environment = environment;
     task.standardOutput = log ?: [NSFileHandle fileHandleWithNullDevice];
     task.standardError = log ?: [NSFileHandle fileHandleWithNullDevice];

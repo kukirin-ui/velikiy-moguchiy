@@ -2015,4 +2015,152 @@ mod tests {
 
         let _ = fs::remove_dir_all(&tmp);
     }
+
+    /// Serves `files` (URL path -> body) over HTTP on 127.0.0.1 until the test ends.
+    fn serve(files: Vec<(&'static str, Vec<u8>)>) -> String {
+        use std::io::{BufRead, BufReader, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut request_line = String::new();
+                if reader.read_line(&mut request_line).is_err() {
+                    continue;
+                }
+                loop {
+                    let mut header = String::new();
+                    if reader.read_line(&mut header).unwrap_or(0) == 0 || header == "\r\n" {
+                        break;
+                    }
+                }
+                let path = request_line.split_whitespace().nth(1).unwrap_or("").to_string();
+                let mut stream = stream;
+                match files.iter().find(|(p, _)| *p == path) {
+                    Some((_, body)) => {
+                        let head = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
+                        let _ = stream.write_all(head.as_bytes());
+                        let _ = stream.write_all(body);
+                    }
+                    None => {
+                        let _ = stream.write_all(
+                            b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                        );
+                    }
+                }
+            }
+        });
+        base
+    }
+
+    fn sha_hex(data: &[u8]) -> String {
+        format!("{:x}", Sha256::digest(data))
+    }
+
+    fn download_dir(name: &str, files: Vec<ModelFile>) -> PathBuf {
+        let tmp = std::env::temp_dir().join(format!(
+            "velikiy-moguchiy-download-{name}-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&tmp).unwrap();
+        let manifest = ModelManifest {
+            provider: "lips".into(),
+            mode: None,
+            description: "download test".into(),
+            repo: "test/model".into(),
+            files,
+        };
+        fs::write(tmp.join(MANIFEST_FILE), serde_json::to_string(&manifest).unwrap()).unwrap();
+        tmp
+    }
+
+    fn run_download(dir: &Path) -> Result<()> {
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(download_model(dir, |_| {}, CancellationToken::new()))
+    }
+
+    #[test]
+    fn download_saves_verified_files_under_manifest_names() {
+        let lora = b"lora weights".to_vec();
+        let venc = b"visual front-end".to_vec();
+        let base = serve(vec![
+            ("/releases/velikiy-moguchiy-lips-0.1.pt", lora.clone()),
+            ("/releases/velikiy-moguchiy-lips-0.1-venc.pth", venc.clone()),
+        ]);
+        let dir = download_dir(
+            "ok",
+            vec![
+                ModelFile {
+                    name: "best.pt".into(),
+                    size: lora.len() as u64,
+                    sha256: sha_hex(&lora),
+                    url: format!("{base}/releases/velikiy-moguchiy-lips-0.1.pt"),
+                },
+                ModelFile {
+                    name: "sub/best_venc.pth".into(),
+                    size: venc.len() as u64,
+                    sha256: sha_hex(&venc),
+                    url: format!("{base}/releases/velikiy-moguchiy-lips-0.1-venc.pth"),
+                },
+            ],
+        );
+
+        run_download(&dir).unwrap();
+
+        assert_eq!(fs::read(dir.join("best.pt")).unwrap(), lora);
+        assert_eq!(fs::read(dir.join("sub/best_venc.pth")).unwrap(), venc);
+        assert!(!dir.join("best.pt.part").exists());
+        assert_eq!(model_status(&dir, VerifyMode::ForceVerify), ModelStatus::Installed);
+        // A second run finds everything in place and downloads nothing.
+        run_download(&dir).unwrap();
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn download_with_wrong_hash_keeps_nothing() {
+        let served = b"tampered model".to_vec();
+        let base = serve(vec![("/model.pth", served.clone())]);
+        let dir = download_dir(
+            "bad-hash",
+            vec![ModelFile {
+                name: "model.pth".into(),
+                size: served.len() as u64,
+                sha256: sha_hex(b"the model the manifest promised"),
+                url: format!("{base}/model.pth"),
+            }],
+        );
+
+        let err = run_download(&dir).unwrap_err().to_string();
+
+        assert!(err.contains("sha256 mismatch"), "{err}");
+        assert!(!dir.join("model.pth").exists());
+        assert!(!dir.join("model.pth.part").exists());
+        assert_eq!(model_status(&dir, VerifyMode::Normal), ModelStatus::NotInstalled);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn download_reports_a_missing_file() {
+        let base = serve(vec![]);
+        let dir = download_dir(
+            "missing",
+            vec![ModelFile {
+                name: "model.pth".into(),
+                size: 4,
+                sha256: sha_hex(b"data"),
+                url: format!("{base}/gone.pth"),
+            }],
+        );
+
+        assert!(run_download(&dir).is_err());
+        assert!(!dir.join("model.pth").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

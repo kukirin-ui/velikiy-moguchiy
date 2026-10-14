@@ -125,6 +125,31 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      - name: Check bundle id and bundled lips service
+        # macOS keeps permissions and preferences per bundle id: the published
+        # builds must all carry the permanent one from MacApp/Config/Base.xcconfig.
+        run: |
+          set -euo pipefail
+          APP="MacApp/build-ci/derived/Build/Products/Release/VelikiyMoguchiy.app"
+          ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Contents/Info.plist")
+          echo "Bundle id: $ID"
+          test "$ID" = "io.github.zigansh1n.velikiy-moguchiy"
+          test -f "$APP/Contents/Resources/lipread/lips_service.py"
+          test -f "$APP/Contents/Resources/lipread/uv.lock"
+
+      - name: Logic tests
+        working-directory: mac/MacApp
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project VelikiyMoguchiy.xcodeproj \
+            -scheme VelikiyMoguchiyLogicTests \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build-ci/derived-tests \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO
+
       - name: Package app
         run: |
           scripts/package-app.sh \

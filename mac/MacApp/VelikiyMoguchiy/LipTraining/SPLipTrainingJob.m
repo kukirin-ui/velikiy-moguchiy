@@ -2,6 +2,7 @@
 #import "SPAppPaths.h"
 #import "SPLipCaptureManager.h"
 #import "SPLipsService.h"
+#import "SPLipsRuntime.h"
 
 #include <errno.h>
 #include <signal.h>
@@ -46,6 +47,10 @@ static const NSTimeInterval kShortCommandTimeout = 30.0;
 /// nil when the lipread checkout can run the job, else what is missing.
 - (NSString *)setupProblem {
     NSFileManager *fm = [NSFileManager defaultManager];
+    SPLipsRuntime *runtime = [SPLipsRuntime sharedRuntime];
+    if (![runtime usesDeveloperCheckout] && ![runtime isReady]) {
+        return @"Сначала установите режим губ: нажмите клавишу губ (hotkey.lips_key) и согласитесь на загрузку";
+    }
     if (![fm isExecutableFileAtPath:[self pythonPath]]) {
         return @"Нет окружения lipread (.venv): запустите lipread/setup.sh или укажите lips.service_dir";
     }
@@ -61,6 +66,8 @@ static const NSTimeInterval kShortCommandTimeout = 30.0;
     environment[@"PYTHONIOENCODING"] = @"utf-8";
     // ffmpeg for the face crops; GUI apps do not inherit the shell's PATH.
     environment[@"PATH"] = [@"/opt/homebrew/bin:/usr/local/bin:" stringByAppendingString:environment[@"PATH"] ?: @"/usr/bin:/bin"];
+    NSString *bin = [[SPLipsRuntime sharedRuntime] binDirectory];
+    if (bin) environment[@"PATH"] = [NSString stringWithFormat:@"%@:%@", bin, environment[@"PATH"]];
     if (job) {
         // The one R11 allowance for ML on the Mac: memguard.py and tools/mem_guard.py let through only the
         // scripts of this job with it. Only this user-started job gets the variable.

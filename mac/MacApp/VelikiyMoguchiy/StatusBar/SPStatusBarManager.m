@@ -28,6 +28,8 @@ static const NSInteger kHeaderItemTag = 1001;
 @property (nonatomic, strong) NSMenuItem *voiceInputItem;
 @property (nonatomic, strong) NSMenuItem *statsItem;
 @property (nonatomic, strong) NSMenuItem *outputModeItem;
+@property (nonatomic, strong) NSMenuItem *appUpdateItem;
+@property (nonatomic, strong) NSMenuItem *lipsModelUpdateItem;
 @property (nonatomic, strong) NSTimer *animationTimer;
 @property (nonatomic, assign) NSInteger animationFrame;
 @property (nonatomic, copy) NSString *currentState;
@@ -98,6 +100,22 @@ static const NSInteger kHeaderItemTag = 1001;
 
     [menu addItem:[self ornamentSeparatorItem]];
 
+    self.appUpdateItem = [[NSMenuItem alloc] initWithTitle:@"Доступна новая версия"
+                                                    action:@selector(openAppUpdate:)
+                                             keyEquivalent:@""];
+    self.appUpdateItem.target = self;
+    self.appUpdateItem.image = [self menuSymbol:@"arrow.down.circle"];
+    self.appUpdateItem.hidden = YES;
+    [menu addItem:self.appUpdateItem];
+
+    self.lipsModelUpdateItem = [[NSMenuItem alloc] initWithTitle:@"Новая модель губ"
+                                                          action:@selector(updateLipsModel:)
+                                                   keyEquivalent:@""];
+    self.lipsModelUpdateItem.target = self;
+    self.lipsModelUpdateItem.image = [self menuSymbol:@"arrow.down.circle"];
+    self.lipsModelUpdateItem.hidden = YES;
+    [menu addItem:self.lipsModelUpdateItem];
+
     self.permissionsWarningItem = [[NSMenuItem alloc] initWithTitle:@"⚠︎ Нужны разрешения…"
                                                              action:@selector(fixMissingPermission:)
                                                       keyEquivalent:@""];
@@ -119,6 +137,13 @@ static const NSInteger kHeaderItemTag = 1001;
     setupWizard.target = self;
     setupWizard.image = [self menuSymbol:@"gearshape"];
     [menu addItem:setupWizard];
+
+    NSMenuItem *reportProblem = [[NSMenuItem alloc] initWithTitle:@"Сообщить о проблеме…"
+                                                           action:@selector(reportProblem:)
+                                                    keyEquivalent:@""];
+    reportProblem.target = self;
+    reportProblem.image = [self menuSymbol:@"exclamationmark.bubble"];
+    [menu addItem:reportProblem];
 
     // More submenu
     NSMenuItem *moreItem = [[NSMenuItem alloc] initWithTitle:@"Ещё" action:nil keyEquivalent:@""];
@@ -765,6 +790,34 @@ static const NSInteger kHeaderItemTag = 1001;
     if ([self.delegate respondsToSelector:@selector(statusBarDidSelectSetupWizard)]) {
         [self.delegate statusBarDidSelectSetupWizard];
     }
+}
+
+- (void)reportProblem:(id)sender {
+    if ([self.delegate respondsToSelector:@selector(statusBarDidSelectReportProblem)]) {
+        [self.delegate statusBarDidSelectReportProblem];
+    }
+}
+
+- (void)openAppUpdate:(id)sender {
+    if ([self.delegate respondsToSelector:@selector(statusBarDidSelectAppUpdate)]) {
+        [self.delegate statusBarDidSelectAppUpdate];
+    }
+}
+
+- (void)updateLipsModel:(id)sender {
+    if ([self.delegate respondsToSelector:@selector(statusBarDidSelectLipsModelUpdate)]) {
+        [self.delegate statusBarDidSelectLipsModelUpdate];
+    }
+}
+
+- (void)showAppUpdateVersion:(NSString *)version {
+    self.appUpdateItem.title = version.length > 0 ? [NSString stringWithFormat:@"Доступна новая версия %@…", version] : @"";
+    self.appUpdateItem.hidden = version.length == 0;
+}
+
+- (void)showLipsModelUpdate:(NSString *)tag {
+    self.lipsModelUpdateItem.title = tag.length > 0 ? [NSString stringWithFormat:@"Обновить модель губ до %@…", tag] : @"";
+    self.lipsModelUpdateItem.hidden = tag.length == 0;
 }
 
 - (void)toggleVoiceInput:(id)sender {

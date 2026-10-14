@@ -10,8 +10,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (instancetype)sharedService;
 
-/// The lipread checkout the service and «Обучить на мне» run from: `lips.service_dir`,
-/// else ~/velikiy-moguchiy/lipread (or an older ~/velikiy-moguchiy/lipread-ru).
+/// The lipread folder the service and «Обучить на мне» run from: `lips.service_dir`,
+/// else the environment SPLipsRuntime manages in the app's data folder.
 + (NSString *)lipreadDirectory;
 
 /// Starts the process when it is not running and asks it to load the model,

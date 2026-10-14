@@ -20,6 +20,12 @@
 - (void)statusBarDidSelectRepasteLastDictation;
 /// A mode picked in "Ещё ▸ Режим текста": raw, light, structured or formal.
 - (void)statusBarDidSelectOutputMode:(nullable NSString *)mode;
+/// "Сообщить о проблеме…".
+- (void)statusBarDidSelectReportProblem;
+/// "Доступна новая версия …".
+- (void)statusBarDidSelectAppUpdate;
+/// "Обновить модель губ до …".
+- (void)statusBarDidSelectLipsModelUpdate;
 @end
 
 NS_ASSUME_NONNULL_BEGIN
@@ -44,6 +50,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// state: "idle", "recording_hold", "recording_toggle", "connecting_asr",
 ///        "finalizing_asr", "correcting", "preparing_paste", "pasting", "error", "completed"
 - (void)updateState:(NSString *)state;
+
+/// Shows "Доступна новая версия …" at the top of the menu; nil hides it.
+- (void)showAppUpdateVersion:(nullable NSString *)version;
+
+/// Shows "Обновить модель губ до …"; nil hides it.
+- (void)showLipsModelUpdate:(nullable NSString *)tag;
 
 @end
 
