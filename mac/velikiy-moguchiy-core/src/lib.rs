@@ -571,6 +571,14 @@ pub extern "C" fn sp_core_silence_stop_seconds() -> f32 {
         .unwrap_or(0.0)
 }
 
+/// Seconds after which any recording ends (`recording.max_duration_s`); 0 when off.
+#[no_mangle]
+pub extern "C" fn sp_core_recording_cap_seconds() -> f32 {
+    config::load_config()
+        .map(|cfg| cfg.recording.max_duration())
+        .unwrap_or(0.0)
+}
+
 /// Start (seconds > 0) or stop (0) watching the mic feed for the end of speech.
 /// Call when a hands-free recording begins and again with 0 when it is over.
 #[no_mangle]

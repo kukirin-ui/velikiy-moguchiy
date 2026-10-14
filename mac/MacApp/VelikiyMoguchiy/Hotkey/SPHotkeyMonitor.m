@@ -1444,6 +1444,9 @@ static CGEventRef hotkeyEventCallback(CGEventTapProxy proxy,
                 // Hold mode: short press is ignored
                 self.state = SPHotkeyStateIdle;
                 [self.delegate hotkeyMonitorDidCancelTrigger];
+                if ([self.delegate respondsToSelector:@selector(hotkeyMonitorDidIgnoreShortPress)]) {
+                    [self.delegate hotkeyMonitorDidIgnoreShortPress];
+                }
             }
             break;
 

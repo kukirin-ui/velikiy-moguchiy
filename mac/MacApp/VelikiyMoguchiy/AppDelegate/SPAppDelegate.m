@@ -31,6 +31,7 @@
 #import "velikiy_moguchiy_core.h"
 #import "SPAppPaths.h"
 #import "SPErrorExplainer.h"
+#import "SPHotkeyNames.h"
 #import <os/log.h>
 #import <sys/stat.h>
 #import <UserNotifications/UserNotifications.h>
@@ -117,6 +118,8 @@
 @property (nonatomic, assign) BOOL watchedAccessibilityGranted;
 @property (nonatomic, assign) BOOL watchedInputMonitoringGranted;
 @property (nonatomic, assign) BOOL hotkeyRestartPending;
+// Ends a recording that has gone on for recording.max_duration_s.
+@property (nonatomic, strong) NSTimer *recordingCapTimer;
 @property (nonatomic, assign) SPSessionPurpose pendingSessionPurpose;
 @property (nonatomic, assign) SPSessionPurpose sessionPurpose;
 // Session result metadata delivered just before the final text; consumed
@@ -171,6 +174,11 @@ static const float kSilentMicPeak = 0.0001f;
 static const NSTimeInterval kMicSilenceHintDelay = 2.5;
 static const NSTimeInterval kWarningRepeatInterval = 10 * 60;
 static NSString *const kSessionStartFailure = @"Не удалось начать сессию";
+// How many times the first-use hints are shown before they stop.
+static const NSInteger kFirstUseHintLimit = 3;
+static NSString *const kHoldHintCountKey = @"SPHoldHintCount";
+static NSString *const kHandsFreeHintCountKey = @"SPHandsFreeHintCount";
+static const NSInteger kEscapeKeyCode = 53;
 static const NSTimeInterval kAbortResultLingerDuration = 0.8;
 static const NSTimeInterval kQuickBadgeLingerDuration = 1.8;
 
@@ -1228,6 +1236,7 @@ static BOOL SPLabFlag(const char *name) {
     if (![self beginRustSessionWithMode:SPSessionModeHold]) return;
     [self startAudioCaptureWithRetryIncludingPreRoll:YES];
     [self startMicSilenceWatch];
+    [self startRecordingCap];
 }
 
 - (void)hotkeyMonitorDidDetectHoldEnd {
@@ -1287,6 +1296,69 @@ static BOOL SPLabFlag(const char *name) {
     [self startAudioCaptureWithRetryIncludingPreRoll:NO];
     [self startSilenceAutoStopIfConfigured];
     [self startMicSilenceWatch];
+    [self startRecordingCap];
+    [self showHandsFreeHintIfNeeded];
+}
+
+#pragma mark - Recording limit and first-use hints
+
+/// recording.max_duration_s: a recording left running (a forgotten hands-free
+/// one, a stuck key) ends the way the user would have ended it.
+- (void)startRecordingCap {
+    [self.recordingCapTimer invalidate];
+    self.recordingCapTimer = nil;
+    float seconds = sp_core_recording_cap_seconds();
+    if (seconds <= 0) return;
+    uint64_t token = self.rustBridge.currentSessionToken;
+    __weak typeof(self) weakSelf = self;
+    self.recordingCapTimer = [NSTimer scheduledTimerWithTimeInterval:seconds
+                                                             repeats:NO
+                                                               block:^(NSTimer *timer) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf || token != strongSelf.rustBridge.currentSessionToken) return;
+        NSString *state = strongSelf.sessionState;
+        if (![state hasPrefix:@"recording"]) return;
+        NSLog(@"[VelikiyMoguchiy] Recording reached its %.0fs limit — ending it", seconds);
+        if ([state isEqualToString:@"recording_hold"]) {
+            [strongSelf hotkeyMonitorDidDetectHoldEnd];
+            [strongSelf resetAllHotkeyMonitorsToIdle];
+        } else {
+            [strongSelf stopSilenceAutoStop];
+            [strongSelf endHandsFreeRecordingLikeSecondTap];
+        }
+        [strongSelf showInfoMessage:[NSString stringWithFormat:
+            @"Запись остановлена: прошло %.0f мин. Предел меняется в Настройках → Управление → Запись.",
+            seconds / 60.0]];
+    }];
+}
+
+/// The trigger's name for a sentence, "клавишу" when it has none.
+- (NSString *)triggerKeyShortName {
+    return SPHotkeyShortName(configStringValue("hotkey.trigger_key")) ?: @"клавишу";
+}
+
+/// Shows a first-use hint while its counter is below the limit. YES when shown.
+- (BOOL)takeFirstUseHint:(NSString *)counterKey {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    NSInteger shown = [defaults integerForKey:counterKey];
+    if (shown >= kFirstUseHintLimit) return NO;
+    [defaults setInteger:shown + 1 forKey:counterKey];
+    return YES;
+}
+
+/// The first hands-free recordings say how they end, next to the level bars.
+- (void)showHandsFreeHintIfNeeded {
+    if (self.hotkeyMonitor.abortKeyCode != kEscapeKeyCode) return;
+    if (![self takeFirstUseHint:kHandsFreeHintCountKey]) return;
+    [self.overlayPanel setRecordingHint:[NSString stringWithFormat:@"Ещё раз %@ — готово · Esc — отмена",
+                                                                   [self triggerKeyShortName]]];
+}
+
+- (void)hotkeyMonitorDidIgnoreShortPress {
+    if (!sessionStateAllowsConfigReload(self.sessionState)) return;
+    if (![self takeFirstUseHint:kHoldHintCountKey]) return;
+    [self.overlayPanel showMessage:[NSString stringWithFormat:@"Держите %@ и говорите", [self triggerKeyShortName]]
+                              icon:SPOverlayMessageIconNotice];
 }
 
 #pragma mark - A microphone that gives nothing
@@ -1297,6 +1369,7 @@ static BOOL SPLabFlag(const char *name) {
     [self.micSilenceTimer invalidate];
     uint64_t token = self.rustBridge.currentSessionToken;
     NSDate *started = [NSDate date];
+    __block BOOL hintShown = NO;
     __weak typeof(self) weakSelf = self;
     self.micSilenceTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
                                                            repeats:YES
@@ -1308,9 +1381,14 @@ static BOOL SPLabFlag(const char *name) {
             return;
         }
         if (-started.timeIntervalSinceNow < kMicSilenceHintDelay) return;
-        BOOL silent = sp_core_mic_peak() < kSilentMicPeak;
-        [strongSelf.overlayPanel setRecordingHint:silent ? @"Микрофон молчит" : nil];
-        if (!silent) [timer invalidate];
+        if (sp_core_mic_peak() < kSilentMicPeak) {
+            [strongSelf.overlayPanel setRecordingHint:@"Микрофон молчит"];
+            hintShown = YES;
+            return;
+        }
+        // Another hint (the hands-free one) stays; only this one is taken back.
+        if (hintShown) [strongSelf.overlayPanel setRecordingHint:nil];
+        [timer invalidate];
     }];
 }
 

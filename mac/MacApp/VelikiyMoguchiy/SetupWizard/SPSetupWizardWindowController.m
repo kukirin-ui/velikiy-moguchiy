@@ -923,6 +923,7 @@ static NSString *SPCondensedProviderError(NSString *raw) {
 @property(nonatomic, strong) NSPopUpButton *repasteKeyPopup;
 @property(nonatomic, strong) NSPopUpButton *mouseButtonPopup;
 @property(nonatomic, strong) NSPopUpButton *autoStopSilencePopup;
+@property(nonatomic, strong) NSPopUpButton *recordingCapPopup;
 @property(nonatomic, strong) NSSwitch *voiceCommandsSwitch;
 @property(nonatomic, strong) NSSwitch *mediaPlayPauseSwitch;
 @property(nonatomic, strong) NSSwitch *keepLastDictationSwitch;
@@ -2912,6 +2913,7 @@ static NSString *SPCondensedProviderError(NSString *raw) {
   self.keepMicWarmSwitch = [self settingsSwitchWithAction:NULL];
   self.lipflowSwitch = [self settingsSwitchWithAction:NULL];
   self.autoStopSilencePopup = [self autoStopSilencePopupButton];
+  self.recordingCapPopup = [self recordingCapPopupButton];
   NSView *recordingCard =
       [self cardWithTitle:@"Запись"
                      rows:@[
@@ -2923,6 +2925,8 @@ static NSString *SPCondensedProviderError(NSString *raw) {
                                       control:self.lipflowSwitch],
                        [self cardRowWithLabel:@"Автостоп по тишине (без удержания)"
                                       control:self.autoStopSilencePopup],
+                       [self cardRowWithLabel:@"Предел длины записи"
+                                      control:self.recordingCapPopup],
                      ]
                     width:cardWidth];
 
@@ -3302,6 +3306,27 @@ static NSString *SPCondensedProviderError(NSString *raw) {
     @[ @"3 с", @"3" ],
     @[ @"5 с", @"5" ],
     @[ @"8 с", @"8" ],
+    @[ @"15 с", @"15" ],
+    @[ @"30 с", @"30" ],
+    @[ @"60 с", @"60" ],
+  ];
+  for (NSArray<NSString *> *option in options) {
+    [popup addItemWithTitle:option[0]];
+    [popup lastItem].representedObject = option[1];
+  }
+  return popup;
+}
+
+// Seconds after which any recording ends; "0" is no limit.
+- (NSPopUpButton *)recordingCapPopupButton {
+  NSPopUpButton *popup =
+      [[NSPopUpButton alloc] initWithFrame:NSMakeRect(0, 0, 168, 26)
+                                 pullsDown:NO];
+  NSArray<NSArray<NSString *> *> *options = @[
+    @[ @"Без предела", @"0" ],
+    @[ @"5 мин", @"300" ],
+    @[ @"10 мин", @"600" ],
+    @[ @"30 мин", @"1800" ],
   ];
   for (NSArray<NSString *> *option in options) {
     [popup addItemWithTitle:option[0]];
@@ -7055,6 +7080,11 @@ static void appleSpeechInstallCallback(void *ctx, int32_t eventType,
           customTitle:^NSString *(NSString *value) {
             return [NSString stringWithFormat:@"%@ с", value];
           }];
+    [self selectValue:configGet(@"recording.max_duration_s")
+              inPopup:self.recordingCapPopup
+          customTitle:^NSString *(NSString *value) {
+            return [NSString stringWithFormat:@"%@ с", value];
+          }];
     BOOL voiceCommands = configBooleanValue(configGet(@"commands.enabled"), YES);
     self.voiceCommandsSwitch.state =
         voiceCommands ? NSControlStateValueOn : NSControlStateValueOff;
@@ -7072,6 +7102,8 @@ static void appleSpeechInstallCallback(void *ctx, int32_t eventType,
                              forKey:@"hotkey.mouse_button"];
     [self rememberLoadedStringValue:self.autoStopSilencePopup.selectedItem.representedObject ?: @"0"
                              forKey:@"recording.auto_stop_silence_s"];
+    [self rememberLoadedStringValue:self.recordingCapPopup.selectedItem.representedObject ?: @"0"
+                             forKey:@"recording.max_duration_s"];
     [self rememberLoadedStringValue:self.hotkeyPopup.selectedItem.representedObject ?: @"fn"
                              forKey:@"hotkey.trigger_key"];
     [self rememberLoadedStringValue:self.triggerModePopup.selectedItem.representedObject ?: @"hold"
@@ -7492,6 +7524,9 @@ static void appleSpeechInstallCallback(void *ctx, int32_t eventType,
     saveOk &= [self saveStringValue:self.autoStopSilencePopup.selectedItem
                                         .representedObject ?: @"0"
                              forKey:@"recording.auto_stop_silence_s"];
+    saveOk &= [self saveStringValue:self.recordingCapPopup.selectedItem
+                                        .representedObject ?: @"0"
+                             forKey:@"recording.max_duration_s"];
   }
   if (self.voiceCommandsSwitch) {
     BOOL value = self.voiceCommandsSwitch.state == NSControlStateValueOn;

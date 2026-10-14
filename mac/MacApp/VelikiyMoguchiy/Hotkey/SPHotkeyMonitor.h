@@ -18,6 +18,9 @@
 /// shortcut such as Cmd-C): the user is not dictating, so the session must be
 /// discarded. Unconfirmed (pending) triggers get hotkeyMonitorDidCancelTrigger.
 - (void)hotkeyMonitorDidCancelHoldForCompanionInput;
+/// In hold mode the trigger was pressed and let go too quickly to record
+/// (after hotkeyMonitorDidCancelTrigger): the user may not know to hold it.
+- (void)hotkeyMonitorDidIgnoreShortPress;
 @end
 
 /// Stamped (kCGEventSourceUserData) on every key event the app itself posts —
