@@ -417,7 +417,7 @@ impl QwenAsrProvider {
             .map_err(|e| AsrError::Protocol(format!("serialize client event: {e}")))?;
 
         if let Some(ref mut ws) = self.ws {
-            ws.send(Message::Text(msg_text))
+            ws.send(Message::Text(msg_text.into()))
                 .await
                 .map_err(|e| AsrError::Protocol(format!("send client event: {e}")))?;
             Ok(())

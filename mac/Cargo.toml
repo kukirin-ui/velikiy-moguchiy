@@ -39,26 +39,26 @@ uuid = "1.23"
 
 # velikiy-moguchiy-asr
 audiopus = "0.3.0-rc.0"
-base64 = "0.22"
+base64 = "0.23"
 flate2 = "1.1"
-md-5 = "0.10"
+md-5 = "0.11"
 rustls = { version = "0.23", default-features = false }
 sherpa-onnx = "1.12"
-tokio-tungstenite = "0.24"
+tokio-tungstenite = "0.30"
 # Same parser reqwest uses internally; endpoint validation must judge the
 # URL exactly as it will be fetched.
 url = "2.5"
 
 # velikiy-moguchiy-core
-cbindgen = "0.27"
+cbindgen = "0.29"
 # Ed25519 checks of downloaded model releases; already in the tree through rustls.
 ring = "0.17"
 env_logger = "0.11"
 serde_yaml = "0.9"
-sha2 = "0.10"
+sha2 = "0.11"
 tokio-util = "0.7"
 urlencoding = "2.1"
 
 # velikiy-moguchiy-cli
 clap = "4.6"
-indicatif = "0.17"
+indicatif = "0.18"

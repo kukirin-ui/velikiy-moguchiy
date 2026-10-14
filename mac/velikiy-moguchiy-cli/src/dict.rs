@@ -259,7 +259,7 @@ pub fn count_analyzable(db_path: &Path) -> usize {
             conn.query_row(
                 "SELECT COUNT(*) FROM sessions WHERE asr_text IS NOT NULL",
                 [],
-                |row| row.get::<_, usize>(0),
+                |row| row.get::<_, i64>(0).map(|n| n as usize),
             )
             .ok()
         })

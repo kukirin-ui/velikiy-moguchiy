@@ -931,6 +931,11 @@ where
     Ok(())
 }
 
+/// Lowercase hex of a digest; the 0.11 digest output type no longer implements `LowerHex`.
+fn hex_lower(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// Hash a regular file.
 ///
 /// Hashing reads to EOF, so a character device (`/dev/zero`) or fifo would
@@ -971,7 +976,7 @@ fn sha256_file(path: &Path) -> Result<String> {
         }
         hasher.update(&buf[..n]);
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hex_lower(&hasher.finalize()))
 }
 
 #[cfg(test)]
@@ -998,7 +1003,7 @@ mod tests {
         let correct_sha = {
             let mut hasher = Sha256::new();
             hasher.update(correct_content);
-            format!("{:x}", hasher.finalize())
+            hex_lower(&hasher.finalize())
         };
 
         let manifest = ModelManifest {
@@ -1073,7 +1078,7 @@ mod tests {
         let sha = {
             let mut hasher = Sha256::new();
             hasher.update(content);
-            format!("{:x}", hasher.finalize())
+            hex_lower(&hasher.finalize())
         };
 
         let manifest = ModelManifest {
@@ -1185,7 +1190,7 @@ mod tests {
         let sha = {
             let mut hasher = Sha256::new();
             hasher.update(content);
-            format!("{:x}", hasher.finalize())
+            hex_lower(&hasher.finalize())
         };
 
         let manifest = ModelManifest {
@@ -1302,7 +1307,7 @@ mod tests {
         let sha = {
             let mut hasher = Sha256::new();
             hasher.update(content);
-            format!("{:x}", hasher.finalize())
+            hex_lower(&hasher.finalize())
         };
         let manifest = ModelManifest {
             provider: "test".into(),
@@ -1410,7 +1415,7 @@ mod tests {
         let sha = {
             let mut hasher = Sha256::new();
             hasher.update(content);
-            format!("{:x}", hasher.finalize())
+            hex_lower(&hasher.finalize())
         };
         let manifest = ModelManifest {
             provider: "test".into(),
@@ -1708,7 +1713,7 @@ mod tests {
         let sha = {
             let mut hasher = Sha256::new();
             hasher.update(content);
-            format!("{:x}", hasher.finalize())
+            hex_lower(&hasher.finalize())
         };
         let manifest = ModelManifest {
             provider: "test".into(),
@@ -1758,7 +1763,7 @@ mod tests {
     fn sha_of(bytes: &[u8]) -> String {
         let mut hasher = Sha256::new();
         hasher.update(bytes);
-        format!("{:x}", hasher.finalize())
+        hex_lower(&hasher.finalize())
     }
 
     fn write_manifest(model_dir: &Path, files: Vec<ModelFile>) {
@@ -2057,7 +2062,7 @@ mod tests {
     }
 
     fn sha_hex(data: &[u8]) -> String {
-        format!("{:x}", Sha256::digest(data))
+        hex_lower(&Sha256::digest(data))
     }
 
     fn download_dir(name: &str, files: Vec<ModelFile>) -> PathBuf {
