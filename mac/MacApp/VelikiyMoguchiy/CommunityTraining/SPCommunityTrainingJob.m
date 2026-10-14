@@ -1,6 +1,6 @@
 #import "SPCommunityTrainingJob.h"
 #import "SPCommunityTrainingPolicy.h"
-#import "velikiy_moguchiy_core.h"
+#import "SPLipsService.h"
 
 static const NSTimeInterval kShortCommandTimeout = 30.0;
 /// `send` uploads a few megabytes with the transport's own retries.
@@ -9,28 +9,9 @@ static const NSTimeInterval kSendTimeout = 15.0 * 60.0;
 static const NSTimeInterval kLoginTimeout = 20.0 * 60.0;
 static NSString *const kAppJob = @"help-train";
 
-static NSString *configString(const char *keyPath) {
-    char *raw = sp_config_get(keyPath);
-    if (!raw) return @"";
-    NSString *value = [[NSString stringWithUTF8String:raw] ?: @""
-        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    sp_core_free_string(raw);
-    return value;
-}
-
-/// The lipread checkout, resolved as SPLipsService does.
+/// The lipread folder every lips feature runs from (a developer checkout or the app's managed environment).
 static NSString *lipreadDirectory(void) {
-    NSString *dir = [configString("lips.service_dir") stringByExpandingTildeInPath];
-    if (dir.length == 0) {
-        dir = [NSHomeDirectory() stringByAppendingPathComponent:@"velikiy-moguchiy/lipread"];
-        NSString *legacy = [NSHomeDirectory() stringByAppendingPathComponent:@"velikiy-moguchiy/lipread-ru"];
-        BOOL isDir = NO;
-        if (![[NSFileManager defaultManager] fileExistsAtPath:dir] &&
-            [[NSFileManager defaultManager] fileExistsAtPath:legacy isDirectory:&isDir] && isDir) {
-            dir = legacy;
-        }
-    }
-    return dir.stringByStandardizingPath;
+    return [SPLipsService lipreadDirectory].stringByStandardizingPath;
 }
 
 @interface SPCommunityTrainingJob ()
@@ -72,7 +53,8 @@ static NSString *lipreadDirectory(void) {
     NSTask *task = [[NSTask alloc] init];
     task.executableURL = [NSURL fileURLWithPath:[self pythonPath]];
     task.currentDirectoryURL = [NSURL fileURLWithPath:self.federatedDirectory isDirectory:YES];
-    task.arguments = [SPCommunityTrainingPolicy argumentsForCommand:command value:value];
+    task.arguments = [[SPCommunityTrainingPolicy argumentsForCommand:command value:value]
+        arrayByAddingObjectsFromArray:@[ @"--lipread-dir", lipreadDirectory() ]];
     NSMutableDictionary *environment = [[[NSProcessInfo processInfo] environment] mutableCopy];
     environment[@"PYTHONUNBUFFERED"] = @"1";
     environment[@"PYTHONIOENCODING"] = @"utf-8";

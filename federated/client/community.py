@@ -499,8 +499,11 @@ def main(argv=None) -> int:
                                     "preview", "send", "discard"])
     ap.add_argument("value", nargs="?", choices=["on", "off"])
     ap.add_argument("--home")
+    ap.add_argument("--lipread-dir", help="папка lipread, из которой работает чтение по губам (приложение передаёт свою)")
     a = ap.parse_args(argv)
     cfg = load_config(Path(a.home) if a.home else None)
+    if a.lipread_dir:
+        cfg.training.lipread_ru_dir = a.lipread_dir
     out = lambda obj: print(json.dumps(obj, ensure_ascii=False), flush=True)  # noqa: E731
     if a.cmd == "status":
         out(status_report(cfg))
