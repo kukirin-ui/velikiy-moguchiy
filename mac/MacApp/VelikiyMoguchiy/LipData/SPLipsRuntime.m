@@ -92,6 +92,18 @@ static NSString *formatBytes(unsigned long long bytes) {
     return [[NSBundle mainBundle] pathForResource:@"lipread-tools" ofType:nil];
 }
 
+/// federated/client and federated/protocol for «Помочь обучить», run with the service's Python.
+- (NSString *)bundledFederatedDirectory {
+    return [[NSBundle mainBundle] pathForResource:@"lipread-federated" ofType:nil];
+}
+
+- (NSString *)federatedDirectory {
+    if ([self usesDeveloperCheckout]) {
+        return [[[self serviceDirectory] stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"federated"];
+    }
+    return [[self lipsRoot] stringByAppendingPathComponent:@"federated"];
+}
+
 /// The lipread folder of the source tree this build came from, when it has
 /// its own environment (lipread/setup.sh); nil for builds from CI.
 - (NSString *)sourceCheckoutDirectory {
@@ -149,7 +161,11 @@ static NSString *formatBytes(unsigned long long bytes) {
     if (!code) return @"";
     CC_SHA256_CTX ctx;
     CC_SHA256_Init(&ctx);
-    for (NSString *dir in @[ code, [self bundledToolsDirectory] ?: @"" ]) {
+    NSString *federated = [self bundledFederatedDirectory] ?: @"";
+    NSArray *dirs = @[ code, [self bundledToolsDirectory] ?: @"", [federated stringByAppendingPathComponent:@"client"],
+                       [federated stringByAppendingPathComponent:@"protocol"],
+                       [federated stringByAppendingPathComponent:@"protocol/specs"] ];
+    for (NSString *dir in dirs) {
         NSArray<NSString *> *names = [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:nil]
             sortedArrayUsingSelector:@selector(compare:)];
         for (NSString *name in names) {
@@ -666,7 +682,10 @@ static NSString *formatBytes(unsigned long long bytes) {
     if (failure) return failure;
     if (![fm isExecutableFileAtPath:uv]) return @"в архиве uv нет программы uv";
 
-    NSArray *copies = @[ @[ [self bundledCodeDirectory], service ], @[ [self bundledToolsDirectory] ?: @"", toolsDir ] ];
+    NSString *federatedDir = [[self lipsRoot] stringByAppendingPathComponent:@"federated"];
+    [fm createDirectoryAtPath:federatedDir withIntermediateDirectories:YES attributes:nil error:nil];
+    NSArray *copies = @[ @[ [self bundledCodeDirectory], service ], @[ [self bundledToolsDirectory] ?: @"", toolsDir ],
+                         @[ [self bundledFederatedDirectory] ?: @"", federatedDir ] ];
     for (NSArray *pair in copies) {
         for (NSString *name in [fm contentsOfDirectoryAtPath:pair[0] error:nil]) {
             NSString *destination = [pair[1] stringByAppendingPathComponent:name];

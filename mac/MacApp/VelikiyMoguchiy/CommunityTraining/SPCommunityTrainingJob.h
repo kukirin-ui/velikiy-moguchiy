@@ -2,8 +2,9 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Runs federated/client/community.py for «Помочь обучить»: `<federated>/.venv/bin/python -m client.community
-/// <command>` in the `federated` folder next to the lipread checkout (`lips.service_dir`, as the lips service).
+/// Runs federated/client/community.py for «Помочь обучить»: `python -m client.community <command>` in the
+/// federated folder SPLipsRuntime names (next to a developer's lipread folder, or the managed copy), with that
+/// folder's own .venv if it has one, else the lips environment's Python.
 /// Short commands answer one JSON line; `login` streams its lines; `run` is started in the background with
 /// VELIKIY_MOGUCHIY_APP_JOB=help-train and outlives the app, its progress read back through `status`.
 /// Every completion runs on the main queue.
@@ -15,6 +16,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// nil when the federated checkout can run the client, else a short note how to set it up.
 - (nullable NSString *)setupProblem;
+
+/// YES on an app-only install whose lips environment is missing or out of date: the card offers the same
+/// one-click setup as the lips mode (SPLipsRuntime), which also installs the client.
+- (BOOL)needsInstall;
 
 /// A short command (`status`, `consent on|off`, `logout`, `pause`, `resume`, `cancel`, `preview`, `send`,
 /// `discard`). `json` is the last JSON line it printed (NSNull for `null`), or nil with a message for the user.

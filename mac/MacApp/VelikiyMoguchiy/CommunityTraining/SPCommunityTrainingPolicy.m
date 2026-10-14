@@ -18,15 +18,15 @@ static NSNumber *numberValue(id value) {
 
 #pragma mark Process
 
-+ (NSString *)federatedDirectoryForLipreadDirectory:(NSString *)lipreadDirectory {
-    NSString *checkout = lipreadDirectory.stringByStandardizingPath.stringByDeletingLastPathComponent;
-    return [checkout stringByAppendingPathComponent:@"federated"];
-}
-
 + (NSArray<NSString *> *)argumentsForCommand:(NSString *)command value:(NSString *)value {
     NSMutableArray *arguments = [@[ @"-m", @"client.community", command ] mutableCopy];
     if (value.length > 0) [arguments addObject:value];
     return arguments;
+}
+
++ (NSString *)installNote {
+    return @"Для «Помочь обучить» нужно то же, что для режима «губы»: модель чтения по губам и библиотеки. "
+           @"Нажмите «Установить» — приложение скажет, сколько это займёт места, и всё поставит само.";
 }
 
 + (NSString *)setupProblemForFederatedDirectory:(NSString *)federatedDirectory
@@ -38,10 +38,8 @@ static NSNumber *numberValue(id value) {
                                           federatedDirectory];
     }
     if (!pythonExists) {
-        return [NSString stringWithFormat:@"Нет окружения Python для обучения. В папке %@ выполните "
-                                          @"«uv venv --python 3.13 .venv», затем «uv pip install …» со списком "
-                                          @"пакетов из federated/README.md, раздел «Окружение».",
-                                          federatedDirectory];
+        return @"Нет окружения Python для обучения: в папке lipread выполните ./setup.sh (uv sync ставит и "
+               @"пакеты клиента) или создайте federated/.venv по federated/README.md, раздел «Окружение».";
     }
     return nil;
 }

@@ -105,9 +105,13 @@ hf upload z1gansh1n/velikiy-moguchiy-exam exam . --repo-type dataset
 
 ## Mac участника
 
-Нужны `yt-dlp`, `ffmpeg` (`brew install yt-dlp ffmpeg`), установленное чтение по губам и окружение `federated/.venv`
-(см. README). Модельные шаги идут с `VELIKIY_MOGUCHIY_APP_JOB=help-train` под `tools/mem_guard.py` с лимитами
-«Обучить на мне» (исключение R11 в `lipread/RULES.md`).
+Отдельно ничего ставить не нужно. Клиент обучения (`federated/client`, `federated/protocol`) входит в приложение и
+ставится тем же нажатием «Установить», что и режим «губы» (`SPLipsRuntime`): код копируется в окружение приложения
+(`lips/federated`), а его пакеты — `cryptography`, `pydantic`, `httpx`, `safetensors`, `yt-dlp` — закреплены вместе с
+остальными в `lipread/uv.lock` (по хэшам), ffmpeg — тот же, что у режима «губы». Новая версия приложения с другим
+кодом клиента пересобирает окружение. У разработчика вместо этого берутся `federated/` рядом с его папкой lipread и
+её `.venv` (или `federated/.venv`, если есть). Модельные шаги идут с `VELIKIY_MOGUCHIY_APP_JOB=help-train` под
+`tools/mem_guard.py` с лимитами «Обучить на мне» (R11a в `lipread/RULES.md`).
 
 ## Что где хранится
 

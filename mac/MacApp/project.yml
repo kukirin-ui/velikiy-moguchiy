@@ -110,6 +110,12 @@ targets:
           rm -rf "$DEST-tools"
           mkdir -p "$DEST-tools"
           cp "$SRC/../tools/mem_guard.py" "$DEST-tools/"
+          # «Помочь обучить»: the federated client runs in the same environment (its packages are in uv.lock).
+          rm -rf "$DEST-federated"
+          mkdir -p "$DEST-federated/client" "$DEST-federated/protocol/specs"
+          cp "$SRC/../federated/client/"*.py "$DEST-federated/client/"
+          cp "$SRC/../federated/protocol/"*.py "$DEST-federated/protocol/"
+          cp "$SRC/../federated/protocol/specs/"*.json "$DEST-federated/protocol/specs/"
         basedOnDependencyAnalysis: false
 
   VelikiyMoguchiyLogicTests:

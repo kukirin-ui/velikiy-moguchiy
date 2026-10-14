@@ -36,7 +36,9 @@ GitHub Actions. Она готова к развёртыванию, но пока
 .venv/bin/python -m client.community send                # отправить (или discard — выбросить)
 ```
 
-Для `run` нужны `yt-dlp`, `ffmpeg` и установленное чтение по губам (`training.lipread_ru_dir`): модельные шаги
+В приложении клиент ставится вместе с режимом «губы» (одна кнопка «Установить»; пакеты, включая `yt-dlp`, закреплены в
+`lipread/uv.lock`). Из командной строки для `run` нужны папка lipread с окружением (`--lipread-dir` или
+`training.lipread_ru_dir`), `yt-dlp` и `ffmpeg`: модельные шаги
 идут через `lipread/train_on_me_worker.py` и `lipread/train.py` под `tools/mem_guard.py`; на Mac их пропускает только
 `VELIKIY_MOGUCHIY_APP_JOB=help-train`, который ставит кнопка в приложении (клиент его сам не ставит, R11a в
 `lipread/RULES.md`).

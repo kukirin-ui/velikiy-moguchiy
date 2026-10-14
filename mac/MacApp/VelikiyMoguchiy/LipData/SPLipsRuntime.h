@@ -11,6 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 ///                                 weights -> models/lips/multivsr,
 ///                                 results/pod_runs/t1/checkpoints/me1 -> models/lips/releases/<tag>
 ///   lips/tools/, lips/python/     uv and the Python it installs
+///   lips/federated/               the «Помочь обучить» client from the app bundle (its packages are in uv.lock)
 ///   models/lips/multivsr/         MultiVSR model.pth + feature_extractor.pth (from the authors)
 ///   models/lips/releases/<tag>/   best.pt + best_venc.pth of a lips-* release
 ///   models/lips/tools/            the uv and MultiVSR code archives
@@ -33,6 +34,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// the source tree a local build came from when it has its .venv, else the
 /// managed environment.
 - (NSString *)serviceDirectory;
+
+/// The federated client folder for «Помочь обучить»: federated/ next to a developer's
+/// lipread folder, else the managed copy (lips/federated) the setup makes from the app.
+- (NSString *)federatedDirectory;
 
 /// YES when serviceDirectory is a developer's lipread folder, not the managed one.
 - (BOOL)usesDeveloperCheckout;

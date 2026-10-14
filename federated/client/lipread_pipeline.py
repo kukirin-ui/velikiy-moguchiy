@@ -49,7 +49,8 @@ class LipreadPipeline:
         self.cfg = cfg
         self.lipread = Path(cfg.training.lipread_ru_dir).expanduser()
         self.py = self.lipread / ".venv" / "bin" / "python"
-        self.ffmpeg = cfg.community.ffmpeg or shutil.which("ffmpeg") or "ffmpeg"
+        bundled = self.lipread / "bin" / "ffmpeg"     # the app's lips environment links imageio-ffmpeg here
+        self.ffmpeg = cfg.community.ffmpeg or shutil.which("ffmpeg") or (str(bundled) if bundled.exists() else "ffmpeg")
 
     def yt_dlp(self) -> list[str]:
         if self.cfg.community.yt_dlp:

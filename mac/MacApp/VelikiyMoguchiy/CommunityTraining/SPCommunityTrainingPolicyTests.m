@@ -52,13 +52,6 @@
 
 #pragma mark Process
 
-- (void)testFederatedDirectoryIsSiblingOfLipread {
-    XCTAssertEqualObjects([SPCommunityTrainingPolicy federatedDirectoryForLipreadDirectory:@"/u/velikiy-moguchiy/lipread"],
-                          @"/u/velikiy-moguchiy/federated");
-    XCTAssertEqualObjects([SPCommunityTrainingPolicy federatedDirectoryForLipreadDirectory:@"/u/vm/lipread-ru/"],
-                          @"/u/vm/federated");
-}
-
 - (void)testArguments {
     XCTAssertEqualObjects([SPCommunityTrainingPolicy argumentsForCommand:@"status" value:nil],
                           (@[ @"-m", @"client.community", @"status" ]));
@@ -69,8 +62,8 @@
 - (void)testSetupProblem {
     XCTAssertNil([SPCommunityTrainingPolicy setupProblemForFederatedDirectory:@"/f" pythonExists:YES scriptExists:YES]);
     NSString *noVenv = [SPCommunityTrainingPolicy setupProblemForFederatedDirectory:@"/f" pythonExists:NO scriptExists:YES];
-    XCTAssertTrue([noVenv containsString:@"uv venv --python 3.13 .venv"]);
-    XCTAssertTrue([noVenv containsString:@"/f"]);
+    XCTAssertTrue([noVenv containsString:@"./setup.sh"]);
+    XCTAssertTrue([[SPCommunityTrainingPolicy installNote] containsString:@"«Установить»"]);
     NSString *noCheckout = [SPCommunityTrainingPolicy setupProblemForFederatedDirectory:@"/f" pythonExists:NO scriptExists:NO];
     XCTAssertTrue([noCheckout hasPrefix:@"Не найдена папка federated"]);
 }

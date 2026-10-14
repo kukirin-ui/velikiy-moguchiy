@@ -20,6 +20,12 @@ dependencies = [
     "pillow==11.3.0",
     # ffmpeg для кадров с камеры у пользователей приложения без Homebrew (режим «губы», mac/ SPLipsRuntime).
     "imageio-ffmpeg==0.6.0",
+    # «Помочь обучить» (federated/client) в том же окружении приложения: протокол, подписи, сеть, скачивание роликов.
+    "cryptography==50.0.1",
+    "pydantic==2.13.5",
+    "httpx==0.28.1",
+    "safetensors==0.8.0",
+    "yt-dlp==2026.8.19",
     # Для рекордера: выбор встроенной камеры (как в Lipflow), только macOS.
     "pyobjc-framework-avfoundation>=10.3; sys_platform == 'darwin'",
 ]

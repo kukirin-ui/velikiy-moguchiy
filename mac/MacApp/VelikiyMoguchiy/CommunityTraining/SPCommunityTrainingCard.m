@@ -1,6 +1,7 @@
 #import "SPCommunityTrainingCard.h"
 #import "SPCommunityTrainingJob.h"
 #import "SPCommunityTrainingPolicy.h"
+#import "SPLipsRuntime.h"
 #import "SPSettingsViews.h"
 #import "SPTheme.h"
 
@@ -199,7 +200,7 @@ static NSString *const kStartFailedHint =
 
     NSView *startRow = [[NSView alloc] initWithFrame:NSZeroRect];
     place(startRow, 28.0, 8.0);
-    self.startButton = [self buttonWithTitles:@[ @"Помочь обучить" ] action:@selector(startPressed:)];
+    self.startButton = [self buttonWithTitles:@[ @"Помочь обучить", @"Установить" ] action:@selector(startPressed:)];
     self.startButton.frame = NSMakeRect(0, 0, MAX(170.0, self.startButton.frame.size.width), 28.0);
     [startRow addSubview:self.startButton];
 
@@ -451,7 +452,10 @@ static NSString *const kStartFailedHint =
     }
     self.githubLabel.textColor = self.loginError && !self.loggingIn && !loggedIn ? SPTheme.failure : SPTheme.secondaryLabel;
 
-    self.startButton.enabled = ready && !self.busy && !active && [SPCommunityTrainingPolicy canStartWithStatus:status];
+    BOOL install = [[SPCommunityTrainingJob sharedJob] needsInstall];
+    self.startButton.title = install ? @"Установить" : @"Помочь обучить";
+    self.startButton.enabled = install ? !self.busy && ![SPLipsRuntime sharedRuntime].isInstalling
+                                       : ready && !self.busy && !active && [SPCommunityTrainingPolicy canStartWithStatus:status];
 
     NSString *failure = self.setupProblem ?: self.statusError ?: self.actionError;
     self.noteLabel.stringValue = failure ?: ([SPCommunityTrainingPolicy blockerForStatus:status] ?: @"");
@@ -593,6 +597,13 @@ static NSString *const kStartFailedHint =
 }
 
 - (void)startPressed:(id)sender {
+    if ([[SPCommunityTrainingJob sharedJob] needsInstall]) {
+        __weak typeof(self) weakSelf = self;
+        [[SPLipsRuntime sharedRuntime] offerSetupWithCompletion:^(BOOL ready) {
+            [weakSelf refresh];
+        }];
+        return;
+    }
     self.startedAt = [NSDate date];
     self.actionError = nil;
     [self render];

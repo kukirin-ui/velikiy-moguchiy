@@ -19,11 +19,11 @@ typedef NS_ENUM(NSInteger, SPCommunityJobState) {
 
 #pragma mark Process
 
-/// The `federated` folder next to the lipread checkout.
-+ (NSString *)federatedDirectoryForLipreadDirectory:(NSString *)lipreadDirectory;
-
 /// `-m client.community <command> [value]`.
 + (NSArray<NSString *> *)argumentsForCommand:(NSString *)command value:(nullable NSString *)value;
+
+/// Shown on an app-only install before the lips environment is set up.
++ (NSString *)installNote;
 
 /// nil when the federated checkout can run the client, else how to set it up.
 + (nullable NSString *)setupProblemForFederatedDirectory:(NSString *)federatedDirectory

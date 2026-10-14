@@ -1,5 +1,6 @@
 #import "SPCommunityTrainingJob.h"
 #import "SPCommunityTrainingPolicy.h"
+#import "SPLipsRuntime.h"
 #import "SPLipsService.h"
 
 static const NSTimeInterval kShortCommandTimeout = 30.0;
@@ -33,14 +34,23 @@ static NSString *lipreadDirectory(void) {
 }
 
 - (NSString *)federatedDirectory {
-    return [SPCommunityTrainingPolicy federatedDirectoryForLipreadDirectory:lipreadDirectory()];
+    return [[SPLipsRuntime sharedRuntime] federatedDirectory].stringByStandardizingPath;
 }
 
+/// A developer's federated/.venv when there is one, else the lips environment (its uv.lock has the client's packages).
 - (NSString *)pythonPath {
-    return [self.federatedDirectory stringByAppendingPathComponent:@".venv/bin/python"];
+    NSString *own = [self.federatedDirectory stringByAppendingPathComponent:@".venv/bin/python"];
+    if ([[NSFileManager defaultManager] isExecutableFileAtPath:own]) return own;
+    return [lipreadDirectory() stringByAppendingPathComponent:@".venv/bin/python"];
+}
+
+- (BOOL)needsInstall {
+    SPLipsRuntime *runtime = [SPLipsRuntime sharedRuntime];
+    return !runtime.usesDeveloperCheckout && !runtime.isReady;
 }
 
 - (NSString *)setupProblem {
+    if ([self needsInstall]) return [SPCommunityTrainingPolicy installNote];
     NSString *dir = self.federatedDirectory;
     NSFileManager *fm = [NSFileManager defaultManager];
     return [SPCommunityTrainingPolicy

@@ -986,3 +986,17 @@ def test_bootstrap_is_scored_and_published_from_the_same_bytes(tmp_path):
         publish_plan(ctx2, plan)
     out = publish_plan(ctx, plan)
     assert out.status == "bootstrapped" and hub.registry.adapter_bytes(1) == first
+
+
+def test_pipeline_finds_ffmpeg_of_the_app_environment(tmp_path, monkeypatch):
+    import shutil as sh
+
+    from client.config import ClientConfig
+    from client.lipread_pipeline import LipreadPipeline
+    lipread = tmp_path / "lips" / "service"
+    (lipread / "bin").mkdir(parents=True)
+    (lipread / "bin" / "ffmpeg").write_text("")
+    monkeypatch.setattr(sh, "which", lambda name: None)
+    cfg = ClientConfig(home=tmp_path / "home")
+    cfg.training.lipread_ru_dir = str(lipread)
+    assert LipreadPipeline(cfg).ffmpeg == str(lipread / "bin" / "ffmpeg")
