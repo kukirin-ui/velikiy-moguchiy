@@ -9,7 +9,8 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 
 /**
- * Android's own speech recognition, used when there is no DashScope key. On Android 12+ the
+ * Android's own speech recognition, used without a DashScope key when the user turned it on: the
+ * service decides where the audio goes, usually Google's servers. On Android 12+ the
  * on-device recognizer comes first; when it lacks the language, the default service (often
  * online) takes over. Must be used on the main thread.
  */

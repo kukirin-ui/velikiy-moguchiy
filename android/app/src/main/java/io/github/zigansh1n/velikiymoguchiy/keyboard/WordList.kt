@@ -37,7 +37,7 @@ class WordList(entries: List<Pair<String, Int>>, private val alphabet: String) :
 
     val size: Int get() = words.size
 
-    /** Words the user kept as typed or has in the personal dictionary. */
+    /** Words the user kept as typed. */
     fun addWord(word: String) {
         if (word.isNotBlank()) learned += normalize(word)
     }

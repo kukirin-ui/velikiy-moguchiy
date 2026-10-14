@@ -156,7 +156,7 @@ object AutocorrectRules {
     }
 }
 
-/** Shortcut -> phrase pairs: the user's personal dictionary shortcuts, or built-in typo fixes. */
+/** Shortcut -> phrase pairs, such as the built-in typo fixes. */
 class TextReplacementTable(pairs: List<Pair<String, String>> = emptyList()) {
     private val entries: Map<String, String> = pairs
         .filter { (input, text) -> input.isNotEmpty() && input != text }

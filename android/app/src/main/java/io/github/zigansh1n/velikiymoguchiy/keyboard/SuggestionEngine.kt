@@ -10,7 +10,7 @@ class SuggestionEngine(
     /** Built-in typo fixes from the word list ("щас" -> "сейчас"), applied as corrections. */
     private val corrections: TextReplacementTable = TextReplacementTable(),
 ) {
-    /** The user's shortcuts from the Android personal dictionary, applied in every text field. */
+    /** Shortcut -> phrase replacements applied in every text field. */
     var replacements = TextReplacementTable()
 
     /** Words the user put back with ⌫ right after a correction or kept as typed. */

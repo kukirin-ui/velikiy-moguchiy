@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +46,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -135,6 +137,7 @@ class SettingsActivity : ComponentActivity() {
 
 data class SetupStatus(val enabled: Boolean, val selected: Boolean, val microphone: Boolean, val microphoneAsked: Boolean = false)
 
+private const val LICENSES_ASSET = "licenses.txt"
 private const val REPOSITORY_URL = "https://github.com/zigansh1n/velikiy-moguchiy"
 private const val DASHSCOPE_URL = "https://bailian.console.aliyun.com/"
 private const val DASHSCOPE_INTL_URL = "https://modelstudio.console.alibabacloud.com/"
@@ -202,10 +205,13 @@ private fun SettingsScreen(
             Text("Версия ${BuildConfig.VERSION_NAME}. Открытый исходный код.", style = MaterialTheme.typography.bodyMedium)
             Text(
                 "Клавиатура ничего не собирает и не отправляет. Звук диктовки уходит только в DashScope по вашему " +
-                    "ключу или в распознавание речи Android, если ключа нет. Набранный текст остаётся на телефоне.",
+                    "ключу или, если вы это включили, в распознавание речи Android. Набранный текст остаётся на телефоне.",
                 style = MaterialTheme.typography.bodySmall,
             )
             TextButton(onClick = { onOpenLink(REPOSITORY_URL) }) { Text("Исходный код на GitHub") }
+            var showLicenses by remember { mutableStateOf(false) }
+            TextButton(onClick = { showLicenses = true }) { Text("Лицензии") }
+            if (showLicenses) LicensesDialog(onClose = { showLicenses = false })
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -226,8 +232,8 @@ private fun DictationSection(settings: AppSettings, onOpenLink: (String) -> Unit
             if (hasKey) {
                 "Ключ DashScope сохранён: диктовка идёт через Qwen."
             } else {
-                "Ключа нет: диктовка идёт через распознавание речи Android (на телефоне, если оно установлено). " +
-                    "С ключом DashScope распознавание точнее и расставляет знаки препинания."
+                "Для диктовки нужен ключ DashScope. Без него микрофон работает, только если ниже включено " +
+                    "распознавание речи Android."
             },
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -281,13 +287,13 @@ private fun DictationSection(settings: AppSettings, onOpenLink: (String) -> Unit
             TextButton(onClick = { onOpenLink(DASHSCOPE_INTL_URL) }) { Text("Консоль (международная)") }
         }
 
-        Text("Регион", fontWeight = FontWeight.SemiBold)
-        Choice("Китай (dashscope.aliyuncs.com)", region == DashScopeRegion.CHINA) {
-            region = DashScopeRegion.CHINA
-            settings.region = region
-        }
+        Text("Регион ключа", fontWeight = FontWeight.SemiBold)
         Choice("Международный (dashscope-intl.aliyuncs.com)", region == DashScopeRegion.INTERNATIONAL) {
             region = DashScopeRegion.INTERNATIONAL
+            settings.region = region
+        }
+        Choice("Китай (dashscope.aliyuncs.com)", region == DashScopeRegion.CHINA) {
+            region = DashScopeRegion.CHINA
             settings.region = region
         }
 
@@ -300,6 +306,14 @@ private fun DictationSection(settings: AppSettings, onOpenLink: (String) -> Unit
             model = DashScopeModel.OMNI
             settings.model = model
         }
+
+        Toggle(
+            "Распознавание речи Android без ключа",
+            "Выключено по умолчанию. Если ключа DashScope нет, звук уходит в службу распознавания речи, " +
+                "установленную на телефоне. Обычно это Google, и звук может отправляться на её серверы — " +
+                "по её правилам, не по нашим. С ключом эта настройка не используется.",
+            settings.systemSpeech,
+        ) { settings.systemSpeech = it }
     }
 }
 
@@ -346,11 +360,33 @@ private fun TypingSection(settings: AppSettings) {
             }
         }
         Text(
-            "Слова и сокращения из личного словаря Android клавиатура тоже понимает. Клавиша 🌐 переключает " +
-                "русский и английский, долгое нажатие на ней открывает список клавиатур, на микрофоне — эти настройки.",
+            "Клавиша 🌐 переключает русский и английский, долгое нажатие на ней открывает список клавиатур, " +
+                "на микрофоне — эти настройки.",
             style = MaterialTheme.typography.bodySmall,
         )
     }
+}
+
+/** Third-party notices shipped in the APK (assets/licenses.txt). */
+@Composable
+private fun LicensesDialog(onClose: () -> Unit) {
+    val context = LocalContext.current
+    val text = remember {
+        runCatching { context.assets.open(LICENSES_ASSET).bufferedReader().use { it.readText() } }
+            .getOrDefault("Файл лицензий не найден.")
+    }
+    AlertDialog(
+        onDismissRequest = onClose,
+        confirmButton = { TextButton(onClick = onClose) { Text("Закрыть") } },
+        title = { Text("Лицензии") },
+        text = {
+            Text(
+                text,
+                Modifier.verticalScroll(rememberScrollState()),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        },
+    )
 }
 
 @Composable

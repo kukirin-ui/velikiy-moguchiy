@@ -26,7 +26,7 @@ sealed interface DictationState {
 }
 
 /**
- * The microphone key: DashScope with the user's key, or Android's recognizer without one.
+ * The microphone key: DashScope with the user's key, or, if the user opted in, Android's recognizer.
  * Lives on the main thread; [onResult] receives the recognized text there.
  */
 class DictationController(
@@ -70,10 +70,14 @@ class DictationController(
         }
         val key = settings.apiKey()
         try {
-            if (DashScopeProtocol.isUsableKey(key)) startDashScope(key!!, language) else startSystem(language)
+            when {
+                DashScopeProtocol.isUsableKey(key) -> startDashScope(key!!, language)
+                settings.systemSpeech -> startSystem(language)
+                else -> throw DictationException.NoProvider()
+            }
         } catch (error: DictationException) {
             cleanUp()
-            fail(error, needsSettings = error is DictationException.NoPermission)
+            fail(error, needsSettings = error is DictationException.NoPermission || error is DictationException.NoProvider)
             return
         }
         limitJob = main.launch {

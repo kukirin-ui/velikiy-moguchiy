@@ -26,6 +26,7 @@ sealed class DictationException(message: String) : Exception(message) {
     class Service(message: String) : DictationException(message)
     class EmptyResult : DictationException("Речь не распознана.")
     class NoRecognizer : DictationException("На телефоне нет распознавания речи. Добавьте ключ DashScope в настройках.")
+    class NoProvider : DictationException("Добавьте ключ DashScope или включите распознавание речи Android в настройках.")
     class NoPermission : DictationException("Нет доступа к микрофону: разрешите его в настройках клавиатуры.")
     class Microphone(detail: String) : DictationException("Микрофон недоступен: $detail")
 }

@@ -3,7 +3,7 @@
 Сводка по всему репозиторию «Великий & Могучий» (Velikiy Moguchiy). Составлена по файлам самого репозитория:
 вендорным `LICENSE`/`NOTICE`, `Cargo.lock`, `Package.resolved`, `pyproject.toml`/`uv.lock` и документам в папках.
 Подробные списки по частям: [`mac/THIRD_PARTY.md`](mac/THIRD_PARTY.md), [`ios/THIRD_PARTY.md`](ios/THIRD_PARTY.md),
-[`ios/THIRD_PARTY_NOTICES.md`](ios/THIRD_PARTY_NOTICES.md).
+[`ios/THIRD_PARTY_NOTICES.md`](ios/THIRD_PARTY_NOTICES.md), [`android/THIRD_PARTY.md`](android/THIRD_PARTY.md).
 
 Статусы:
 - **подтверждено** — в репозитории есть текст лицензии или прямое и конкретное указание на неё (файл указан);
@@ -159,6 +159,15 @@ python-xlib, av (PyAV, несёт FFmpeg).
 |---|---|---|---|
 | [Oglavie, Monomakh, Vertograd](https://github.com/typiconman/fonts-cu) (набор fonts-cu) | Aleksandr Andreev, Nikita Simmons | SIL OFL 1.1 | Oglavie — вязь заголовков, Monomakh — золотые буквицы, подписи и меню: вложены в приложения Mac и iOS (`Fonts/`, текст лицензии рядом); Vertograd — буквицы README, только в генераторе (`design/old-rus/fonts/`); в SVG все — контурами |
 | [Old Standard TT](https://fonts.google.com/specimen/Old+Standard+TT) | Alexey Kryukov | SIL OFL 1.1 | подписи и заголовки разделов: вложен в приложения Mac и iOS, в SVG — контурами |
+
+## 9. Клавиатура Android
+
+| Компонент | Где | Как используется | Лицензия | Подтверждение | Статус |
+|---|---|---|---|---|---|
+| Списки слов [AOSP LatinIME](https://android.googlesource.com/platform/packages/inputmethods/LatinIME/+/127336e9f29d69607eab55982324b210279ae8c5/dictionaries/) (`ru_wordlist`, `en_US_wordlist`) | `android/app/src/main/assets/dictionary/` | данные подсказок: урезаны по частоте, без личных имён (`android/tools/build_wordlists.py`) | **Apache-2.0**, Copyright (c) 2008, The Android Open Source Project | полный `NOTICE` LatinIME с текстом Apache-2.0 — в `android/THIRD_PARTY.md` и в APK (`assets/licenses.txt`, «Настройки → Лицензии») | подтверждено для AOSP; откуда взяты сами слова, в папке `dictionaries/` не описано, а `NOTICE` LatinIME говорит «Includes Dictionaries © Lexiteria LLC. Used by permission.» — **проверить** у юриста |
+| Material Icons, значок «mic» | иконка приложения (`android/app/src/main/res/drawable/ic_launcher_foreground.xml`) | контур значка | Apache-2.0, Google LLC | `android/THIRD_PARTY.md`, `assets/licenses.txt` | со слов |
+| KeyboardKit 9.9.1 (через порт `ios/Shared/Keyboard`) | `android/app/.../keyboard/KeyboardLayout.kt` | идеи раскладок и состояния Shift/страниц | MIT, `Copyright (c) 2016-2025 Daniel Saidi` | полный текст в `android/THIRD_PARTY.md` и `assets/licenses.txt` | подтверждено |
+| AndroidX, Jetpack Compose, Kotlin, kotlinx.coroutines, kotlinx.serialization, OkHttp, Okio | зависимости APK (`android/gradle/libs.versions.toml`) | библиотеки | Apache-2.0 | список в `android/THIRD_PARTY.md` и `assets/licenses.txt` | со слов |
 
 ## Что сделано к v0.1 и что осталось
 

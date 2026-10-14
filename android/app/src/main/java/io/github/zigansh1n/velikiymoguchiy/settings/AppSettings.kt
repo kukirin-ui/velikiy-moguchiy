@@ -25,7 +25,7 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit().putString(MODEL, value.name).apply()
 
     var region: DashScopeRegion
-        get() = DashScopeRegion.entries.firstOrNull { it.name == prefs.getString(REGION, null) } ?: DashScopeRegion.CHINA
+        get() = DashScopeRegion.entries.firstOrNull { it.name == prefs.getString(REGION, null) } ?: DashScopeRegion.INTERNATIONAL
         set(value) = prefs.edit().putString(REGION, value.name).apply()
 
     var autocorrect by flag("autocorrect", true)
@@ -33,6 +33,9 @@ class AppSettings(context: Context) {
     var smartPunctuation by flag("smart_punctuation", true)
     var doubleSpacePeriod by flag("double_space_period", true)
     var keySound by flag("key_sound", false)
+
+    /** Without a DashScope key, dictate through Android's speech service; it may send audio to Google. */
+    var systemSpeech by flag("system_speech", false)
     var keyVibration by flag("key_vibration", true)
 
     var language: LayoutLanguage

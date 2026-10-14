@@ -1,7 +1,6 @@
 package io.github.zigansh1n.velikiymoguchiy.ime
 
 import android.content.Context
-import android.provider.UserDictionary
 import io.github.zigansh1n.velikiymoguchiy.keyboard.LayoutLanguage
 import io.github.zigansh1n.velikiymoguchiy.keyboard.SuggestionEngine
 import io.github.zigansh1n.velikiymoguchiy.keyboard.TextReplacementTable
@@ -48,34 +47,7 @@ class Dictionaries(private val context: Context, private val keptWords: () -> Se
             engine.reject(word)
             words.addWord(word)
         }
-        val (personal, shortcuts) = personalDictionary(language)
-        personal.forEach(words::addWord)
-        engine.replacements = TextReplacementTable(shortcuts)
         return engine
-    }
-
-    /** Words and shortcuts from Android's personal dictionary (Settings → Languages → Personal dictionary). */
-    private fun personalDictionary(language: LayoutLanguage): Pair<List<String>, List<Pair<String, String>>> {
-        val words = mutableListOf<String>()
-        val shortcuts = mutableListOf<Pair<String, String>>()
-        try {
-            context.contentResolver.query(
-                UserDictionary.Words.CONTENT_URI,
-                arrayOf(UserDictionary.Words.WORD, UserDictionary.Words.SHORTCUT, UserDictionary.Words.LOCALE),
-                null, null, null,
-            )?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val locale = cursor.getString(2)
-                    if (locale != null && !locale.startsWith(language.code)) continue
-                    val word = cursor.getString(0) ?: continue
-                    words += word
-                    cursor.getString(1)?.takeIf { it.isNotBlank() }?.let { shortcuts += it to word }
-                }
-            }
-        } catch (_: RuntimeException) {
-            // Some phones have no personal dictionary provider, or deny it to keyboards.
-        }
-        return words to shortcuts
     }
 
     fun shutdown() = worker.shutdownNow()
