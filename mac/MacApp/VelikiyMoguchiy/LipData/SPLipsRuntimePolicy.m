@@ -4,6 +4,9 @@
 static NSString *const kModelsRepository = @"zigansh1n/velikiy-moguchiy-models";
 static NSString *const kHuggingFaceRepository = @"z1gansh1n/velikiy-moguchiy-lips";
 static NSString *const kAssetPrefix = @"velikiy-moguchiy-lips-";
+/// The public half of FL_MODEL_SIGNING_KEY, as in federated/client/community_defaults.py.
+static NSString *const kSigningPublicKey = @"MqbG8ht29PUCKCdki4D6yfi6OJuovhXwC6EN44QWtag=";
+static NSString *const kSignatureDomain = @"velikiy-moguchiy/lips-release/v1\n";
 static NSString *const kMultivsrCommit = @"af28d8c4b687ee7e41942732eb240e0cdfff3ccd";
 static NSString *const kUvVersion = @"0.12.19";
 /// Python, torch and the other packages of lipread/uv.lock, with uv's cache.
@@ -22,6 +25,26 @@ static NSDictionary *fileEntry(NSString *name, unsigned long long size, NSString
 
 + (NSString *)huggingFaceRepository {
     return kHuggingFaceRepository;
+}
+
++ (NSString *)signingPublicKey {
+    return kSigningPublicKey;
+}
+
++ (NSString *)signatureFileName {
+    return @"SHA256SUMS.txt.sig";
+}
+
++ (NSData *)signedMessageForTag:(NSString *)tag sha256Sums:(NSData *)sums {
+    NSMutableData *message = [[[NSString stringWithFormat:@"%@%@\n", kSignatureDomain, tag]
+        dataUsingEncoding:NSUTF8StringEncoding] mutableCopy];
+    [message appendData:sums ?: [NSData data]];
+    return message;
+}
+
++ (BOOL)signatureRequiredForTag:(NSString *)tag {
+    NSString *version = [SPUpdatePolicy versionFromTag:tag prefix:self.releaseTagPrefix];
+    return !version || [SPUpdatePolicy compareVersion:version toVersion:@"0.1"] == NSOrderedDescending;
 }
 
 + (NSString *)releaseTagPrefix {
@@ -69,10 +92,23 @@ static NSDictionary *fileEntry(NSString *name, unsigned long long size, NSString
         @"files" : @[
             fileEntry(self.uvArchiveName, 16988553ull,
                       @"a9a8df1eedeb192f2e47e40e2faabfb387db4b850209118786d42f89dde3e0ba", uvURL),
-            fileEntry(self.multivsrArchiveName, 95590939ull,
-                      @"58d2738e286bd7237f3740c7df0a05781d598e07b0e32ba91a12ba802b77fcac", codeURL),
+            // Size and hash unknown on purpose: the unpacked tree is checked instead (treeProblemWithExpected:).
+            fileEntry(self.multivsrArchiveName, 0, @"", codeURL),
         ],
     };
+}
+
++ (NSString *)treeProblemWithExpected:(NSDictionary<NSString *, NSString *> *)expected
+                               actual:(NSDictionary<NSString *, NSString *> *)actual {
+    if (expected.count == 0) return @"нет списка файлов MultiVSR";
+    for (NSString *path in expected) {
+        if (!actual[path]) return [@"в коде MultiVSR нет файла " stringByAppendingString:path];
+        if (![actual[path] isEqualToString:expected[path]]) return [@"в коде MultiVSR изменён файл " stringByAppendingString:path];
+    }
+    for (NSString *path in actual) {
+        if (!expected[path]) return [@"в коде MultiVSR лишний файл " stringByAppendingString:path];
+    }
+    return nil;
 }
 
 + (BOOL)isSha256:(NSString *)value {
@@ -86,7 +122,7 @@ static NSDictionary *fileEntry(NSString *name, unsigned long long size, NSString
     NSMutableDictionary<NSString *, NSString *> *sums = [NSMutableDictionary dictionary];
     for (NSString *rawLine in [text componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet]) {
         NSString *line = [rawLine stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
-        if (line.length == 0) continue;
+        if (line.length == 0 || [line hasPrefix:@"#"]) continue;
         NSRange gap = [line rangeOfCharacterFromSet:NSCharacterSet.whitespaceCharacterSet];
         if (gap.location == NSNotFound) return nil;
         NSString *hash = [line substringToIndex:gap.location].lowercaseString;
@@ -236,10 +272,13 @@ static NSDictionary *fileEntry(NSString *name, unsigned long long size, NSString
     return tag;
 }
 
-+ (NSString *)serviceDirectoryForOverride:(NSString *)overridePath managedDirectory:(NSString *)managedDirectory {
++ (NSString *)serviceDirectoryForOverride:(NSString *)overridePath
+                           sourceCheckout:(NSString *)sourceCheckout
+                         managedDirectory:(NSString *)managedDirectory {
     NSString *trimmed = [overridePath stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-    if (trimmed.length == 0) return managedDirectory;
-    return trimmed.stringByExpandingTildeInPath.stringByStandardizingPath;
+    if (trimmed.length > 0) return trimmed.stringByExpandingTildeInPath.stringByStandardizingPath;
+    if (sourceCheckout.length > 0) return sourceCheckout.stringByStandardizingPath;
+    return managedDirectory;
 }
 
 + (unsigned long long)requiredFreeBytes {

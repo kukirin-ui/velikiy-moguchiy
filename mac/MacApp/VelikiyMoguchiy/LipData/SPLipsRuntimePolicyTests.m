@@ -137,9 +137,11 @@ static NSString *const kVencHash = @"5d3d2808d7f2ca462c9ae8851d8b2114f3dc6937887
 - (void)testStaticManifestsAreVerifiable {
     for (NSDictionary *manifest in @[ [SPLipsRuntimePolicy baseModelManifest], [SPLipsRuntimePolicy toolsManifest] ]) {
         for (NSDictionary *file in manifest[@"files"]) {
+            XCTAssertTrue([file[@"url"] hasPrefix:@"https://"]);
+            // GitHub's archive of a commit is not byte-stable: its unpacked tree is checked instead.
+            if ([file[@"name"] isEqual:SPLipsRuntimePolicy.multivsrArchiveName]) continue;
             XCTAssertEqual([file[@"sha256"] length], 64u, @"%@", file[@"name"]);
             XCTAssertGreaterThan([file[@"size"] longLongValue], 0);
-            XCTAssertTrue([file[@"url"] hasPrefix:@"https://"]);
         }
     }
     XCTAssertGreaterThan([SPLipsRuntimePolicy requiredFreeBytes], 4500000000ull);
@@ -154,15 +156,48 @@ static NSString *const kVencHash = @"5d3d2808d7f2ca462c9ae8851d8b2114f3dc6937887
     XCTAssertNil([SPLipsRuntimePolicy directoryNameForTag:nil]);
 }
 
-- (void)testDeveloperCheckoutOverridesTheManagedEnvironment {
-    XCTAssertEqualObjects([SPLipsRuntimePolicy serviceDirectoryForOverride:@"" managedDirectory:@"/data/lips/service"],
-                          @"/data/lips/service");
-    XCTAssertEqualObjects([SPLipsRuntimePolicy serviceDirectoryForOverride:nil managedDirectory:@"/data/lips/service"],
-                          @"/data/lips/service");
-    XCTAssertEqualObjects([SPLipsRuntimePolicy serviceDirectoryForOverride:@" /src/lipread/ " managedDirectory:@"/m"],
-                          @"/src/lipread");
-    XCTAssertEqualObjects([SPLipsRuntimePolicy serviceDirectoryForOverride:@"~/lipread" managedDirectory:@"/m"],
+- (NSString *)serviceDirFor:(NSString *)override source:(NSString *)source {
+    return [SPLipsRuntimePolicy serviceDirectoryForOverride:override sourceCheckout:source managedDirectory:@"/data/lips/service"];
+}
+
+- (void)testDeveloperCheckoutsComeBeforeTheManagedEnvironment {
+    XCTAssertEqualObjects([self serviceDirFor:@"" source:nil], @"/data/lips/service");
+    XCTAssertEqualObjects([self serviceDirFor:nil source:nil], @"/data/lips/service");
+    XCTAssertEqualObjects([self serviceDirFor:nil source:@"/src/repo/lipread"], @"/src/repo/lipread");
+    XCTAssertEqualObjects([self serviceDirFor:@" /src/lipread/ " source:@"/src/repo/lipread"], @"/src/lipread");
+    XCTAssertEqualObjects([self serviceDirFor:@"~/lipread" source:nil],
                           [NSHomeDirectory() stringByAppendingPathComponent:@"lipread"]);
+}
+
+- (void)testMultivsrTreeMustMatchExactly {
+    NSDictionary *pinned = @{@"config.py" : kLoraHash, @"models.py" : kVencHash};
+    XCTAssertNil([SPLipsRuntimePolicy treeProblemWithExpected:pinned actual:pinned]);
+    NSDictionary *changed = @{@"config.py" : kVencHash, @"models.py" : kVencHash};
+    XCTAssertNotNil([SPLipsRuntimePolicy treeProblemWithExpected:pinned actual:changed]);
+    NSDictionary *missing = @{@"config.py" : kLoraHash};
+    XCTAssertNotNil([SPLipsRuntimePolicy treeProblemWithExpected:pinned actual:missing]);
+    NSMutableDictionary *extra = [pinned mutableCopy];
+    extra[@"torch.py"] = kLoraHash;
+    XCTAssertNotNil([SPLipsRuntimePolicy treeProblemWithExpected:pinned actual:extra]);
+    XCTAssertNotNil([SPLipsRuntimePolicy treeProblemWithExpected:@{} actual:@{}]);
+}
+
+- (void)testSignedMessageAndWhichReleasesNeedASignature {
+    NSData *sums = [@"abc  f.pt\n" dataUsingEncoding:NSUTF8StringEncoding];
+    NSString *message = [[NSString alloc] initWithData:[SPLipsRuntimePolicy signedMessageForTag:@"lips-0.2" sha256Sums:sums]
+                                              encoding:NSUTF8StringEncoding];
+    XCTAssertEqualObjects(message, @"velikiy-moguchiy/lips-release/v1\nlips-0.2\nabc  f.pt\n");
+    XCTAssertFalse([SPLipsRuntimePolicy signatureRequiredForTag:@"lips-0.1"]);
+    XCTAssertTrue([SPLipsRuntimePolicy signatureRequiredForTag:@"lips-0.1.1"]);
+    XCTAssertTrue([SPLipsRuntimePolicy signatureRequiredForTag:@"lips-0.2"]);
+    XCTAssertTrue([SPLipsRuntimePolicy signatureRequiredForTag:@"lips-next"]);
+    XCTAssertEqual([[NSData alloc] initWithBase64EncodedString:SPLipsRuntimePolicy.signingPublicKey options:0].length, 32u);
+}
+
+- (void)testSumsSkipComments {
+    NSString *text = [NSString stringWithFormat:@"# pinned tree\n%@  a/b.py\n", kLoraHash];
+    NSDictionary *expected = @{@"a/b.py" : kLoraHash};
+    XCTAssertEqualObjects([SPLipsRuntimePolicy sha256SumsFromText:text], expected);
 }
 
 @end

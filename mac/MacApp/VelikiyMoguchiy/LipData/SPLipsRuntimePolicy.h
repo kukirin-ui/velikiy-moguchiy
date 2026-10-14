@@ -21,14 +21,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// lipread/multivsr_compat.py expects.
 + (NSDictionary *)toolsManifest;
 
+/// Nil when the unpacked MultiVSR code (relative path -> SHA-256) is exactly
+/// the pinned tree (lipread/multivsr_files.sha256): no file missing, changed or
+/// added. GitHub's archives of a commit are not byte-stable, so the archive
+/// itself is not pinned, its contents are.
++ (nullable NSString *)treeProblemWithExpected:(NSDictionary<NSString *, NSString *> *)expected
+                                        actual:(NSDictionary<NSString *, NSString *> *)actual;
+
 /// File name of the uv archive and of the MultiVSR code archive in toolsManifest.
 @property (class, nonatomic, readonly) NSString *uvArchiveName;
 @property (class, nonatomic, readonly) NSString *multivsrArchiveName;
 /// The folder the MultiVSR archive unpacks into.
 @property (class, nonatomic, readonly) NSString *multivsrArchiveRoot;
 
-/// `sha256  name` lines of a SHA256SUMS.txt -> name: lower-case hex. Nil when
-/// a non-empty line is malformed.
+/// `sha256  name` lines of a SHA256SUMS.txt -> name: lower-case hex. `#`
+/// lines are comments. Nil when another non-empty line is malformed.
 + (nullable NSDictionary<NSString *, NSString *> *)sha256SumsFromText:(nullable NSString *)text;
 
 /// Manifest of a `lips-*` release: its LoRA (`*.pt`) saved as best.pt and its
@@ -58,13 +65,29 @@ NS_ASSUME_NONNULL_BEGIN
 /// can stand in for the other when its source is unreachable.
 + (BOOL)manifest:(nullable NSDictionary *)manifest hasSameFilesAs:(nullable NSDictionary *)other;
 
+/// Release signatures: `SHA256SUMS.txt.sig` next to SHA256SUMS.txt holds a
+/// base64 Ed25519 signature of signedMessageForTag:sha256Sums: by the
+/// project's model-signing key (FL_MODEL_SIGNING_KEY, the key that also signs
+/// community adapter versions; tools/models/sign_lips_release.py).
+@property (class, nonatomic, readonly) NSString *signingPublicKey;
+@property (class, nonatomic, readonly) NSString *signatureFileName;
+
+/// The signed bytes: a domain line, the tag, then SHA256SUMS.txt as published.
+/// The tag is signed too, so an old release cannot be passed off as a new one.
++ (NSData *)signedMessageForTag:(NSString *)tag sha256Sums:(NSData *)sums;
+
+/// Releases after lips-0.1 must be signed; lips-0.1 predates the key.
++ (BOOL)signatureRequiredForTag:(NSString *)tag;
+
 /// A folder name for a release tag, or nil when the tag has characters that
 /// do not belong in one.
 + (nullable NSString *)directoryNameForTag:(nullable NSString *)tag;
 
-/// `lips.service_dir` (a developer's lipread checkout) when set, else the
+/// `lips.service_dir` when set; else the lipread folder of the source tree
+/// the app was built from, when it is set up (nil otherwise); else the
 /// environment the app manages.
 + (NSString *)serviceDirectoryForOverride:(nullable NSString *)overridePath
+                           sourceCheckout:(nullable NSString *)sourceCheckout
                          managedDirectory:(NSString *)managedDirectory;
 
 /// Free disk space the first setup needs: the downloads, the Python

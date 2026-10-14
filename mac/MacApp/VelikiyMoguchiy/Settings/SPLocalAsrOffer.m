@@ -5,6 +5,9 @@
 #import "SPRustBridge.h"
 #import "velikiy_moguchiy_core.h"
 
+/// «Не сейчас» is final: a user without a key who wants it later picks a local model in the settings.
+static NSString *const kDeclinedKey = @"SPLocalAsrOfferDeclined";
+
 static NSDictionary *asrConfig(void) {
     char *raw = sp_config_get_json("asr");
     if (!raw) return @{};
@@ -36,6 +39,7 @@ static NSString *providerTitle(NSString *provider) {
 
 - (void)offerIfNeeded {
     if (self.busy || self.offeredThisLaunch) return;
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:kDeclinedKey]) return;
     NSDictionary *asr = asrConfig();
     NSArray<NSString *> *supported = [self.rustBridge supportedLocalProviders];
     if (![SPLocalAsrPolicy shouldOfferLocalAsrWithAsrConfig:asr supportedLocalProviders:supported]) return;
@@ -61,7 +65,10 @@ static NSString *providerTitle(NSString *provider) {
         if (self.openSettingsHandler) self.openSettingsHandler();
         return;
     }
-    if (response != NSAlertFirstButtonReturn) return;
+    if (response != NSAlertFirstButtonReturn) {
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kDeclinedKey];
+        return;
+    }
     [self downloadAndSwitchTo:choice];
 }
 

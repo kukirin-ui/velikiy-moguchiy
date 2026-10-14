@@ -1,6 +1,6 @@
 {
     "provider": "sherpa-onnx",
-    "description": "Russian (Vosk small streaming, Apache-2.0)",
+    "description": "Русская модель Vosk small streaming (Apache-2.0)",
     "repo": "csukuangfj/sherpa-onnx-streaming-zipformer-small-ru-vosk-int8-2025-08-16",
     "files": [
         {

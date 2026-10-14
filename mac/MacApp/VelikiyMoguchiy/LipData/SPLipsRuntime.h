@@ -16,8 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 ///   models/lips/tools/            the uv and MultiVSR code archives
 ///
 /// The links give the service the same layout as a lipread checkout, so it
-/// runs unchanged. `lips.service_dir` points the app at a developer checkout
-/// instead, and then nothing here is used.
+/// runs unchanged. A developer's lipread folder (serviceDirectory) replaces
+/// all of this.
 @interface SPLipsRuntime : NSObject
 
 + (instancetype)sharedRuntime;
@@ -25,13 +25,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// Downloads go through the core's model downloader.
 @property (nonatomic, weak, nullable) SPRustBridge *rustBridge;
 
-/// The folder lips_service.py runs from.
-- (NSString *)serviceDirectory;
-
 /// Extra folder for the service's PATH (ffmpeg), nil for a developer checkout.
 - (nullable NSString *)binDirectory;
 
-/// YES when `lips.service_dir` is set.
+/// The lipread folder every lips feature runs from (the service, «Обучить на
+/// мне», community training): `lips.service_dir`, else the lipread folder of
+/// the source tree a local build came from when it has its .venv, else the
+/// managed environment.
+- (NSString *)serviceDirectory;
+
+/// YES when serviceDirectory is a developer's lipread folder, not the managed one.
 - (BOOL)usesDeveloperCheckout;
 
 /// The service can start: a developer checkout, or the managed environment
@@ -42,6 +45,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSString *)installedReleaseTag;
 
 @property (nonatomic, readonly) BOOL isInstalling;
+
+/// The user answered «Не сейчас» to the setup offer; the key press then only
+/// points at the settings, where offerSetupWithCompletion: is still available.
+@property (nonatomic, readonly) BOOL setupDeclined;
 
 /// Explains what will be downloaded, asks, then installs with a progress
 /// window. When only the environment is out of date (a new app build) it

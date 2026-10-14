@@ -16,7 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// «Указать ключ…»: opens the settings.
 @property (nonatomic, copy, nullable) void (^openSettingsHandler)(void);
 
-/// Shows the offer when SPLocalAsrPolicy says so, at most once per launch.
+/// Shows the offer when SPLocalAsrPolicy says so, at most once per launch and
+/// never again after «Не сейчас».
 - (void)offerIfNeeded;
 
 @end

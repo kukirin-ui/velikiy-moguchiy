@@ -12,6 +12,7 @@ pub mod model_manager;
 pub mod modes;
 pub mod prompt;
 pub mod session;
+pub mod signature;
 pub mod silence;
 pub mod snippets;
 pub mod telemetry;
@@ -2529,6 +2530,39 @@ pub unsafe extern "C" fn sp_core_remove_model_files(model_path: *const c_char) -
     match model_manager::remove_model_files(&model_dir) {
         Ok(n) => n as i32,
         Err(_) => -1,
+    }
+}
+
+/// Verifies an Ed25519 signature of a downloaded model release (see
+/// signature::verify_ed25519). Returns 1 when valid, 0 when not, -1 on
+/// malformed input.
+///
+/// # Safety
+/// The strings must be valid null-terminated C strings and `message` must
+/// point to `message_len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn sp_verify_ed25519(
+    public_key_b64: *const c_char,
+    message: *const u8,
+    message_len: usize,
+    signature_b64: *const c_char,
+) -> i32 {
+    let (Some(key), Some(signature)) =
+        (unsafe { cstr_to_str(public_key_b64) }, unsafe { cstr_to_str(signature_b64) })
+    else {
+        return -1;
+    };
+    if message.is_null() {
+        return -1;
+    }
+    let message = unsafe { std::slice::from_raw_parts(message, message_len) };
+    match signature::verify_ed25519(key, message, signature) {
+        Ok(true) => 1,
+        Ok(false) => 0,
+        Err(e) => {
+            log::warn!("sp_verify_ed25519: {e}");
+            -1
+        }
     }
 }
 

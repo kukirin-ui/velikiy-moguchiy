@@ -101,7 +101,11 @@ targets:
           DEST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/lipread"
           rm -rf "$DEST"
           mkdir -p "$DEST"
-          cp "$SRC"/*.py "$SRC/pyproject.toml" "$SRC/uv.lock" "$DEST/"
+          cp "$SRC"/*.py "$SRC/pyproject.toml" "$SRC/uv.lock" "$SRC/multivsr_files.sha256" "$DEST/"
+          # A build from a checkout remembers its lipread folder, so a developer's ready .venv is used
+          # instead of the managed download (SPLipsRuntime). CI builds for users leave it out.
+          rm -f "$DEST-source.txt"
+          if [ -z "${CI:-}" ]; then (cd "$SRC" && pwd -P) > "$DEST-source.txt"; fi
           # «Обучить на мне» runs its steps under ../tools/mem_guard.py.
           rm -rf "$DEST-tools"
           mkdir -p "$DEST-tools"

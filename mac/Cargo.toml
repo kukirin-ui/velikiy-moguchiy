@@ -51,6 +51,8 @@ url = "2.5"
 
 # velikiy-moguchiy-core
 cbindgen = "0.27"
+# Ed25519 checks of downloaded model releases; already in the tree through rustls.
+ring = "0.17"
 env_logger = "0.11"
 serde_yaml = "0.9"
 sha2 = "0.10"

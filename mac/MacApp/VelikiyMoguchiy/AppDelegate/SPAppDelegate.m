@@ -2493,6 +2493,10 @@ static BOOL SPLabFlag(const char *name) {
     if (self.quitting || self.lipsClip || self.lipsBusy) return;
     SPLipsRuntime *runtime = [SPLipsRuntime sharedRuntime];
     if (![runtime isReady]) {
+        if (runtime.setupDeclined && !runtime.isInstalling) {
+            [self showInfoMessage:@"Режим «губы» не установлен. Установить: Настройки → «Данные для чтения по губам»"];
+            return;
+        }
         // Not from inside the hotkey callback: the offer is a modal alert. The
         // key-up that follows finds no clip and does nothing.
         dispatch_async(dispatch_get_main_queue(), ^{

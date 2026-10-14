@@ -1,6 +1,7 @@
 #import "SPSetupWizardWindowController.h"
 #import "SPLipCaptureManager.h"
 #import "SPLipDataPolicy.h"
+#import "SPLipsRuntime.h"
 #import "SPLipTrainingCard.h"
 #import "SPLocalization.h"
 #import "SPOverlayPanel.h"
@@ -934,6 +935,8 @@ static NSString *SPCondensedProviderError(NSString *raw) {
 // training.contribute: the separate opt-in consent to community training
 @property(nonatomic, strong) NSSwitch *trainingContributeSwitch;
 @property(nonatomic, strong) NSTextField *lipdataCountLabel;
+@property(nonatomic, strong) NSTextField *lipsModeLabel;
+@property(nonatomic, strong) NSButton *lipsModeButton;
 @property(nonatomic, strong) NSSwitch *autoRetryOnErrorSwitch;
 @property(nonatomic, strong) NSTextField *recordingsRetentionField;
 @property(nonatomic, strong) NSStepper *recordingsRetentionStepper;
@@ -3056,9 +3059,42 @@ static NSString *SPCondensedProviderError(NSString *raw) {
       [self cardRowWithLabel:@"Участвовать в общем обучении (только изменения весов)"
                      control:self.trainingContributeSwitch];
 
+  // The lips mode's download is offered here too, so declining it at the key press is not final.
+  self.lipsModeButton = [NSButton buttonWithTitle:@"Установить…"
+                                           target:self
+                                           action:@selector(lipsModeSetupPressed:)];
+  self.lipsModeButton.bezelStyle = NSBezelStyleRounded;
+  self.lipsModeButton.controlSize = NSControlSizeSmall;
+  [self.lipsModeButton sizeToFit];
+  NSView *lipsModeRow = [self cardRowWithLabel:@"Режим «губы»: …" control:self.lipsModeButton];
+  for (NSView *sub in lipsModeRow.subviews) {
+    if ([sub isKindOfClass:[NSTextField class]]) self.lipsModeLabel = (NSTextField *)sub;
+  }
+
   return [self cardWithTitle:@"Данные для чтения по губам"
-                        rows:@[ switchRow, pathRow, countRow, contributeRow ]
+                        rows:@[ switchRow, pathRow, countRow, contributeRow, lipsModeRow ]
                        width:cardWidth];
+}
+
+- (void)refreshLipsModeRow {
+  SPLipsRuntime *runtime = [SPLipsRuntime sharedRuntime];
+  NSString *status;
+  if ([runtime usesDeveloperCheckout]) {
+    status = @"Режим «губы»: папка разработчика";
+  } else if ([runtime isReady]) {
+    status = [NSString stringWithFormat:@"Режим «губы»: установлен, модель %@", [runtime installedReleaseTag] ?: @"—"];
+  } else {
+    status = @"Режим «губы»: не установлен (около 9 ГБ)";
+  }
+  self.lipsModeLabel.stringValue = status;
+  self.lipsModeButton.hidden = [runtime isReady];
+}
+
+- (void)lipsModeSetupPressed:(id)sender {
+  __weak typeof(self) weakSelf = self;
+  [[SPLipsRuntime sharedRuntime] offerSetupWithCompletion:^(BOOL ready) {
+    [weakSelf refreshLipsModeRow];
+  }];
 }
 
 /// Counts the clips on disk off the main thread and shows the total.
@@ -7070,6 +7106,7 @@ static void appleSpeechInstallCallback(void *ctx, int32_t eventType,
         contributeOn ? NSControlStateValueOn : NSControlStateValueOff;
     [self rememberLoadedBooleanValue:contributeOn forKey:@"training.contribute"];
     [self refreshLipdataCounter];
+    [self refreshLipsModeRow];
     NSString *retentionRaw = configGet(@"history.recordings_retention_days");
     NSInteger retention = retentionRaw.length > 0 ? retentionRaw.integerValue
                                                   : kRecordingsRetentionDefault;

@@ -12,8 +12,8 @@
 static NSString *const kBaseModelPath = @"lips/multivsr";
 static NSString *const kToolsModelPath = @"lips/tools";
 static NSString *const kReleasesModelPath = @"lips/releases";
-static NSString *const kFfmpegPackage = @"imageio-ffmpeg==0.6.0";
 static NSString *const kLastModelCheckKey = @"SPLipsModelLastCheck";
+static NSString *const kSetupDeclinedKey = @"SPLipsSetupDeclined";
 static const NSTimeInterval kNetworkTimeout = 30.0;
 
 static NSString *configString(const char *keyPath) {
@@ -92,13 +92,27 @@ static NSString *formatBytes(unsigned long long bytes) {
     return [[NSBundle mainBundle] pathForResource:@"lipread-tools" ofType:nil];
 }
 
+/// The lipread folder of the source tree this build came from, when it has
+/// its own environment (lipread/setup.sh); nil for builds from CI.
+- (NSString *)sourceCheckoutDirectory {
+    NSString *note = [[NSBundle mainBundle] pathForResource:@"lipread-source" ofType:@"txt"];
+    NSString *dir = [[NSString stringWithContentsOfFile:note encoding:NSUTF8StringEncoding error:nil]
+        stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (dir.length == 0) return nil;
+    NSFileManager *fm = [NSFileManager defaultManager];
+    BOOL ready = [fm isExecutableFileAtPath:[dir stringByAppendingPathComponent:@".venv/bin/python"]] &&
+                 [fm fileExistsAtPath:[dir stringByAppendingPathComponent:@"lips_service.py"]];
+    return ready ? dir : nil;
+}
+
 - (NSString *)serviceDirectory {
     return [SPLipsRuntimePolicy serviceDirectoryForOverride:configString("lips.service_dir")
+                                             sourceCheckout:[self sourceCheckoutDirectory]
                                            managedDirectory:[self managedServiceDirectory]];
 }
 
 - (BOOL)usesDeveloperCheckout {
-    return configString("lips.service_dir").length > 0;
+    return ![[self serviceDirectory] isEqualToString:[self managedServiceDirectory]];
 }
 
 - (NSString *)binDirectory {
@@ -179,6 +193,10 @@ static NSString *formatBytes(unsigned long long bytes) {
 
 #pragma mark - Setup
 
+- (BOOL)setupDeclined {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:kSetupDeclinedKey];
+}
+
 - (void)offerSetupWithCompletion:(void (^)(BOOL))completion {
     if (self.isInstalling) {
         [self.panel present];
@@ -222,9 +240,11 @@ static NSString *formatBytes(unsigned long long bytes) {
     [alert addButtonWithTitle:@"Не сейчас"];
     [NSApp activateIgnoringOtherApps:YES];
     if ([alert runModal] != NSAlertFirstButtonReturn) {
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:kSetupDeclinedKey];
         if (completion) completion(NO);
         return;
     }
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:kSetupDeclinedKey];
     [self runSetupWithTitle:@"Установка режима губ" completion:completion];
 }
 
@@ -415,11 +435,11 @@ static NSString *formatBytes(unsigned long long bytes) {
         if (error) *error = @"на GitHub нет опубликованной модели губ";
         return nil;
     }
-    NSString *sumsURL = nil;
+    NSString *sumsURL = nil, *signatureURL = nil;
     for (NSDictionary *asset in release[@"assets"]) {
-        if ([asset isKindOfClass:[NSDictionary class]] && [asset[@"name"] isEqual:@"SHA256SUMS.txt"]) {
-            sumsURL = asset[@"browser_download_url"];
-        }
+        if (![asset isKindOfClass:[NSDictionary class]]) continue;
+        if ([asset[@"name"] isEqual:@"SHA256SUMS.txt"]) sumsURL = asset[@"browser_download_url"];
+        if ([asset[@"name"] isEqual:SPLipsRuntimePolicy.signatureFileName]) signatureURL = asset[@"browser_download_url"];
     }
     NSString *expectedPrefix = [NSString stringWithFormat:@"https://github.com/%@/releases/download/",
                                                           SPLipsRuntimePolicy.modelsRepository];
@@ -427,8 +447,16 @@ static NSString *formatBytes(unsigned long long bytes) {
         if (error) *error = @"в релизе модели нет SHA256SUMS.txt";
         return nil;
     }
-    NSDictionary *sums = [self fetchSha256Sums:[NSURL URLWithString:sumsURL] error:error];
+    if (![signatureURL isKindOfClass:[NSString class]] || ![signatureURL hasPrefix:expectedPrefix]) signatureURL = nil;
+    NSData *sumsData = nil;
+    NSDictionary *sums = [self fetchSha256Sums:[NSURL URLWithString:sumsURL] data:&sumsData error:error];
     if (!sums) return nil;
+    NSString *signatureProblem = [self signatureProblemForTag:tag sums:sumsData
+                                          signatureURL:signatureURL ? [NSURL URLWithString:signatureURL] : nil];
+    if (signatureProblem) {
+        if (error) *error = signatureProblem;
+        return nil;
+    }
     NSString *reason = nil;
     NSDictionary *result = [SPLipsRuntimePolicy modelManifestForRelease:release sha256Sums:sums error:&reason];
     if (!result) {
@@ -451,9 +479,11 @@ static NSString *formatBytes(unsigned long long bytes) {
         if (error) *error = @"Hugging Face недоступен";
         return nil;
     }
-    NSURL *sumsURL = [NSURL URLWithString:[NSString stringWithFormat:@"https://huggingface.co/%@/resolve/%@/SHA256SUMS.txt",
-                                                                     repo, revision]];
-    NSDictionary *sums = [self fetchSha256Sums:sumsURL error:error];
+    NSString *base = [NSString stringWithFormat:@"https://huggingface.co/%@/resolve/%@/", repo, revision];
+    NSData *sumsData = nil;
+    NSDictionary *sums = [self fetchSha256Sums:[NSURL URLWithString:[base stringByAppendingString:@"SHA256SUMS.txt"]]
+                                          data:&sumsData
+                                         error:error];
     if (!sums) return nil;
     NSString *tag = nil, *reason = nil;
     NSDictionary *result = [SPLipsRuntimePolicy huggingFaceManifestFromModelInfo:info sha256Sums:sums tag:&tag error:&reason];
@@ -462,17 +492,50 @@ static NSString *formatBytes(unsigned long long bytes) {
         if (error) *error = [@"модель на Hugging Face не подходит: " stringByAppendingString:reason ?: @"?"];
         return nil;
     }
+    BOOL hasSignature = NO;
+    for (NSDictionary *sibling in info[@"siblings"]) {
+        if ([sibling isKindOfClass:[NSDictionary class]] &&
+            [sibling[@"rfilename"] isEqual:SPLipsRuntimePolicy.signatureFileName]) {
+            hasSignature = YES;
+        }
+    }
+    NSURL *signatureURL = hasSignature
+        ? [NSURL URLWithString:[base stringByAppendingString:SPLipsRuntimePolicy.signatureFileName]] : nil;
+    NSString *signatureProblem = [self signatureProblemForTag:tag sums:sumsData signatureURL:signatureURL];
+    if (signatureProblem) {
+        if (error) *error = signatureProblem;
+        return nil;
+    }
     if (manifest) *manifest = result;
     return tag;
 }
 
-- (NSDictionary *)fetchSha256Sums:(NSURL *)url error:(NSString **)error {
+- (NSDictionary *)fetchSha256Sums:(NSURL *)url data:(NSData **)rawData error:(NSString **)error {
     NSData *data = [self fetchURL:url error:error];
     if (!data) return nil;
     NSDictionary *sums = [SPLipsRuntimePolicy sha256SumsFromText:[[NSString alloc] initWithData:data
                                                                                          encoding:NSUTF8StringEncoding]];
     if (!sums && error) *error = @"SHA256SUMS.txt модели повреждён";
+    if (rawData) *rawData = data;
     return sums;
+}
+
+/// Blocking. Nil when the release's SHA256SUMS.txt carries a valid signature
+/// by the built-in key, or is lips-0.1 without one; else why it is refused.
+- (NSString *)signatureProblemForTag:(NSString *)tag sums:(NSData *)sums signatureURL:(NSURL *)url {
+    NSData *signature = url ? [self fetchURL:url error:nil] : nil;
+    if (!signature) {
+        if (![SPLipsRuntimePolicy signatureRequiredForTag:tag]) return nil;
+        NSLog(@"[VelikiyMoguchiy] lips: %@ carries no signature", tag);
+        return @"у модели губ нет подписи проекта";
+    }
+    NSString *text = [[NSString alloc] initWithData:signature encoding:NSUTF8StringEncoding] ?: @"";
+    NSData *message = [SPLipsRuntimePolicy signedMessageForTag:tag sha256Sums:sums];
+    int32_t verdict = sp_verify_ed25519(SPLipsRuntimePolicy.signingPublicKey.UTF8String, message.bytes, message.length,
+                                        text.UTF8String);
+    if (verdict == 1) return nil;
+    NSLog(@"[VelikiyMoguchiy] lips: the signature of %@ does not verify (%d)", tag, verdict);
+    return @"подпись модели губ не сходится";
 }
 
 /// Blocking. The newest lips model across both sources. Hugging Face comes
@@ -625,20 +688,28 @@ static NSString *formatBytes(unsigned long long bytes) {
                 environment:environment output:nil];
         if (failure) return failure;
         NSString *unpacked = [unpack stringByAppendingPathComponent:SPLipsRuntimePolicy.multivsrArchiveRoot];
+        NSString *listText = [NSString stringWithContentsOfFile:[service stringByAppendingPathComponent:@"multivsr_files.sha256"]
+                                                       encoding:NSUTF8StringEncoding error:nil];
+        NSString *treeProblem = nil;
+        NSDictionary *actual = [self hashesOfTree:unpacked problem:&treeProblem];
+        treeProblem = treeProblem ?: [SPLipsRuntimePolicy treeProblemWithExpected:[SPLipsRuntimePolicy sha256SumsFromText:listText] ?: @{}
+                                                                           actual:actual];
+        if (treeProblem) {
+            NSLog(@"[VelikiyMoguchiy] lips setup: MultiVSR code rejected: %@", treeProblem);
+            [fm removeItemAtPath:unpack error:nil];
+            [fm removeItemAtPath:[[self modelDirectory:kToolsModelPath]
+                                     stringByAppendingPathComponent:SPLipsRuntimePolicy.multivsrArchiveName] error:nil];
+            return @"код MultiVSR не прошёл проверку, запустите установку ещё раз";
+        }
         if (![fm moveItemAtPath:unpacked toPath:multivsr error:nil]) return @"в архиве MultiVSR не та папка";
         [fm removeItemAtPath:unpack error:nil];
     }
 
-    [self reportStep:@"Шаг 4 из 5. Python и библиотеки" detail:@"uv ставит Python 3.13 и PyTorch" progress:-1];
-    // --inexact keeps the ffmpeg package below, which is not in uv.lock.
-    failure = [self run:uv arguments:@[ @"sync", @"--frozen", @"--inexact", @"--project", service ]
-            environment:environment output:nil];
+    [self reportStep:@"Шаг 4 из 5. Python и библиотеки" detail:@"uv ставит Python 3.13, PyTorch и ffmpeg" progress:-1];
+    // uv.lock pins every package, imageio-ffmpeg (ffmpeg for the camera frames) included, by hash.
+    failure = [self run:uv arguments:@[ @"sync", @"--frozen", @"--project", service ] environment:environment output:nil];
     if (failure) return failure;
     NSString *python = [service stringByAppendingPathComponent:@".venv/bin/python"];
-    [self reportStep:@"Шаг 4 из 5. Python и библиотеки" detail:@"ffmpeg для кадров с камеры" progress:-1];
-    failure = [self run:uv arguments:@[ @"pip", @"install", @"--python", python, kFfmpegPackage ]
-            environment:environment output:nil];
-    if (failure) return failure;
     NSString *ffmpegPath = nil;
     failure = [self run:python
               arguments:@[ @"-I", @"-c", @"import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())" ]
@@ -668,6 +739,56 @@ static NSString *formatBytes(unsigned long long bytes) {
     }
     [fm removeItemAtPath:environment[@"UV_CACHE_DIR"] error:nil];
     return nil;
+}
+
+/// SHA-256 of every regular file below `root`, by relative path. Links and
+/// other special files are refused: the pinned tree has none.
+- (NSDictionary<NSString *, NSString *> *)hashesOfTree:(NSString *)root problem:(NSString **)problem {
+    NSMutableDictionary *hashes = [NSMutableDictionary dictionary];
+    NSURL *rootURL = [NSURL fileURLWithPath:root isDirectory:YES];
+    NSDirectoryEnumerator *walker = [[NSFileManager defaultManager]
+                   enumeratorAtURL:rootURL
+        includingPropertiesForKeys:@[ NSURLIsRegularFileKey, NSURLIsDirectoryKey ]
+                           options:0
+                      errorHandler:nil];
+    for (NSURL *url in walker) {
+        NSNumber *isDirectory = nil, *isRegular = nil;
+        [url getResourceValue:&isDirectory forKey:NSURLIsDirectoryKey error:nil];
+        [url getResourceValue:&isRegular forKey:NSURLIsRegularFileKey error:nil];
+        if (isDirectory.boolValue) continue;
+        NSString *relative = [url.path substringFromIndex:MIN(rootURL.path.length + 1, url.path.length)];
+        if (!isRegular.boolValue) {
+            if (problem) *problem = [@"в коде MultiVSR не обычный файл " stringByAppendingString:relative];
+            return @{};
+        }
+        NSString *hash = [self sha256OfFile:url.path];
+        if (!hash) {
+            if (problem) *problem = [@"не прочитать " stringByAppendingString:relative];
+            return @{};
+        }
+        hashes[relative] = hash;
+    }
+    return hashes;
+}
+
+- (NSString *)sha256OfFile:(NSString *)path {
+    NSFileHandle *file = [NSFileHandle fileHandleForReadingAtPath:path];
+    if (!file) return nil;
+    CC_SHA256_CTX ctx;
+    CC_SHA256_Init(&ctx);
+    while (YES) {
+        @autoreleasepool {
+            NSData *chunk = [file readDataUpToLength:1 << 20 error:nil];
+            if (chunk.length == 0) break;
+            CC_SHA256_Update(&ctx, chunk.bytes, (CC_LONG)chunk.length);
+        }
+    }
+    [file closeFile];
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256_Final(digest, &ctx);
+    NSMutableString *hex = [NSMutableString string];
+    for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; i++) [hex appendFormat:@"%02x", digest[i]];
+    return hex;
 }
 
 #pragma mark - Model updates

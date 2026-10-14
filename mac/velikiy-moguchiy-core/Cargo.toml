@@ -26,11 +26,13 @@ wetype-offline = ["velikiy-moguchiy-asr/wetype-offline"]
 
 [dependencies]
 async-trait.workspace = true
+base64.workspace = true
 velikiy-moguchiy-asr = { path = "../velikiy-moguchiy-asr" }
 env_logger.workspace = true
 futures-util.workspace = true
 log.workspace = true
 rustfft = "6.4.0"
+ring.workspace = true
 reqwest = { workspace = true, default-features = false, features = ["json", "rustls-tls", "http2", "stream", "system-proxy"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
