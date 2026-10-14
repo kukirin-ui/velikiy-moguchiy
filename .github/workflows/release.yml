@@ -194,9 +194,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The workflow's own revision, not the released commit: this job needs only the scanner, and the
+      # released commit may be older than a fix to it.
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.sha }}
 
       - name: Download the builds
         uses: actions/download-artifact@v4
