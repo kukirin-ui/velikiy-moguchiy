@@ -1,0 +1,120 @@
+name: Build Android app
+
+# Unit tests, a debug APK and a release APK of the keyboard in android/, on Linux.
+#
+#   - pushes to main and pull requests that touch android/ (or this file);
+#   - tags android-v*; v* tags build it through release.yml, which calls this workflow;
+#   - manually: Actions > Build Android app > Run workflow.
+#
+# The release APK is signed only when the repository has the secrets ANDROID_KEYSTORE_BASE64,
+# ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD (android/README.md shows
+# how to make them). Without them it is unsigned, and Android will not install it: use the debug
+# APK, which is signed with a throwaway debug key.
+
+on:
+  push:
+    branches: [main]
+    tags: ["android-v*"]
+    paths:
+      - "android/**"
+      - ".github/workflows/build-android.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/build-android.yml"
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  # A call from release.yml runs under the caller's workflow name.
+  group: build-android-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Version from the tag
+        # v0.2.1, android-v0.2.1 -> versionName 0.2.1, versionCode 201 (a -suffix is dropped)
+        if: github.ref_type == 'tag'
+        run: |
+          VERSION="${GITHUB_REF_NAME#android-}"; VERSION="${VERSION#v}"; VERSION="${VERSION%%-*}"
+          IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
+          CODE=$(( ${MAJOR:-0} * 10000 + ${MINOR:-0} * 100 + ${PATCH:-0} ))
+          echo "GRADLE_VERSION_ARGS=-PvmVersionName=$VERSION -PvmVersionCode=$CODE" >> "$GITHUB_ENV"
+          echo "Android version $VERSION ($CODE)"
+
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "No signing secrets: the release APK stays unsigned."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          {
+            echo "VM_KEYSTORE_FILE=$RUNNER_TEMP/release.jks"
+            echo "VM_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "VM_KEY_ALIAS=$KEY_ALIAS"
+            echo "VM_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Unit tests
+        run: ./gradlew --console=plain testDebugUnitTest $GRADLE_VERSION_ARGS
+
+      - name: Build APKs
+        run: ./gradlew --console=plain assembleDebug assembleRelease $GRADLE_VERSION_ARGS
+
+      - name: Collect APKs
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/VelikiyMoguchiy-Android-debug.apk
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk dist/VelikiyMoguchiy-Android.apk
+          else
+            cp app/build/outputs/apk/release/app-release-unsigned.apk dist/VelikiyMoguchiy-Android-unsigned.apk
+          fi
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VelikiyMoguchiy-Android-debug
+          path: android/dist/VelikiyMoguchiy-Android-debug.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VelikiyMoguchiy-Android-release
+          path: |
+            android/dist/VelikiyMoguchiy-Android.apk
+            android/dist/VelikiyMoguchiy-Android-unsigned.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-test-reports
+          path: android/app/build/reports/tests/
+          if-no-files-found: ignore

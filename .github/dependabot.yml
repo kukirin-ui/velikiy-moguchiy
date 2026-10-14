@@ -71,6 +71,20 @@ updates:
     commit-message:
       prefix: "deps(swift)"
 
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      android-minor:
+        update-types: [minor, patch]
+      android-major:
+        update-types: [major]
+    commit-message:
+      prefix: "deps(android)"
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
