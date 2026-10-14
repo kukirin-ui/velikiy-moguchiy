@@ -141,5 +141,5 @@ cargo test
 
 CI: задание «Windows app» в `.github/workflows/tests.yml` собирает и тестирует на `windows-latest` при изменениях в
 `windows/` или в ядре, а также собирает вариант с `sherpa-onnx`; `.github/workflows/build-windows.yml` делает
-`VelikiyMoguchiy-Windows-x64.zip` (exe, README, лицензии) и проверяет, что в exe нет espeak-ng, а тег `v*` добавляет
-zip в черновик релиза.
+`VelikiyMoguchiy-Windows-x64.zip` (exe, README, лицензии) и проверяет, что в exe нет espeak-ng; релиз (`release.yml`)
+прикладывает zip к выпуску.

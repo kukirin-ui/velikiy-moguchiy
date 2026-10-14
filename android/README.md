@@ -139,8 +139,9 @@ cd android
 ```
 
 CI (`.github/workflows/build-android.yml`, Linux) на каждый push в main и PR с изменениями в `android/` гоняет
-тесты и собирает оба APK; тег `v*` прикладывает их к черновику релиза через `release.yml`, тег `android-v*`
-собирает только Android. Версия берётся из тега: `v0.2.1` → `versionName 0.2.1`, `versionCode 201`.
+тесты и собирает оба APK; релиз (`release.yml`, сам раз в день или по тегу `v*`) прикладывает их к выпуску, тег
+`android-v*` собирает только Android. Версия берётся из версии релиза или тега: `v0.2.1` → `versionName 0.2.1`,
+`versionCode 201`.
 
 Подпись релиза: один раз выполните `android/scripts/make-signing-key.sh` у себя и добавьте четыре секрета, которые
 он покажет (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`).

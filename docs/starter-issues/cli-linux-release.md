@@ -8,7 +8,7 @@ labels: good first issue,enhancement
 
 **Что сделать.** В [`.github/workflows/release.yml`](https://github.com/zigansh1n/velikiy-moguchiy/blob/main/.github/workflows/release.yml) добавить задание на
 `ubuntu-latest`, которое собирает `cargo build --release -p velikiy-moguchiy-cli` для `x86_64-unknown-linux-gnu`,
-упаковывает бинарник в `velikiy-moguchiy-cli-linux-x86_64.tar.gz` и добавляет его к черновику релиза вместе с
+упаковывает бинарник в `velikiy-moguchiy-cli-linux-x86_64.tar.gz` и добавляет его к файлам релиза вместе с
 контрольной суммой в `SHA256SUMS.txt`. В [`mac/README.md`](https://github.com/zigansh1n/velikiy-moguchiy/blob/main/mac/README.md) — пара строк, как этим
 пользоваться.
 
