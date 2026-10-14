@@ -4,6 +4,21 @@ extension ContentView {
   var settingsScreen: some View {
     Form { Group {
       Section {
+        Button { isGettingStartedPresented = true } label: {
+          Label {
+            HStack {
+              Text("Начало работы").foregroundStyle(.primary)
+              Spacer()
+              Text(
+                setupProgress.isComplete
+                  ? "Всё готово" : "\(setupProgress.completedSteps) из \(SetupProgress.stepCount)"
+              )
+              .foregroundStyle(.secondary)
+              .font(.subheadline)
+            }
+          } icon: { Image(systemName: "checklist").foregroundStyle(OldRus.cinnabar) }
+        }
+        .accessibilityIdentifier("getting-started-link")
         NavigationLink { connectionScreen } label: {
           Label {
             HStack {

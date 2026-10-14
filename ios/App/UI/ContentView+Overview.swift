@@ -5,9 +5,10 @@ extension ContentView {
     ScrollView {
       VStack(spacing: 24) {
         relayHero
-        if !configuration.hasUsableAPIKey {
-          apiKeyRequiredCard
-        } else if relay.status == .error {
+        if !setupProgress.isComplete {
+          gettingStartedCard
+        }
+        if configuration.hasUsableAPIKey, relay.status == .error {
           Label(relay.statusMessage, systemImage: "exclamationmark.circle")
             .font(.subheadline)
             .foregroundStyle(.secondary)
@@ -139,22 +140,36 @@ extension ContentView {
     .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: relay.status)
   }
 
-  var apiKeyRequiredCard: some View {
-    Button { selectedScreen = .settings } label: {
-      HStack(spacing: 12) {
-        Image(systemName: "key.fill").foregroundStyle(OldRus.cinnabar)
+  var gettingStartedCard: some View {
+    let progress = setupProgress
+    return Button { isGettingStartedPresented = true } label: {
+      HStack(spacing: 14) {
+        Image(systemName: progress.hasKey ? "checklist" : "key.fill")
+          .font(.title3)
+          .foregroundStyle(OldRus.cinnabar)
+          .frame(width: 30)
         VStack(alignment: .leading, spacing: 4) {
-          Text("Подключите DashScope").font(.subheadline.weight(.semibold))
-          Text("Добавьте ключ API, чтобы начать.").font(.caption).foregroundStyle(.secondary)
+          Text("Начало работы").font(.headline)
+          Text("Готово \(progress.completedSteps) из \(SetupProgress.stepCount): \(nextStepHint(progress))")
+            .font(.subheadline).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        Spacer()
+        Spacer(minLength: 4)
         Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
       }
       .padding(18)
       .background(OldRus.vellum, in: .rect(cornerRadius: 22))
+      .contentShape(.rect(cornerRadius: 22))
     }
     .buttonStyle(.plain)
-    .accessibilityIdentifier("api-key-required-card")
+    .accessibilityIdentifier("getting-started-card")
+  }
+
+  func nextStepHint(_ progress: SetupProgress) -> String {
+    if !progress.hasKey { return "добавьте ключ DashScope." }
+    if !progress.microphoneGranted { return "разрешите микрофон." }
+    if !progress.keyboardAdded { return "добавьте клавиатуру в настройках iOS." }
+    return "включите клавиатуре полный доступ."
   }
 
   var statusPill: some View {

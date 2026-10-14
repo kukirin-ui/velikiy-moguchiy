@@ -8,11 +8,17 @@ struct ContentView: View {
   @ObservedObject var relay: RelayController
   @Environment(\.accessibilityReduceMotion) var reduceMotion
   @Environment(\.dynamicTypeSize) var dynamicTypeSize
+  @Environment(\.scenePhase) var scenePhase
 
   @State var selectedScreen: Screen = .relay
   @State var recordingPendingDeletion: RecoverableRecording?
   @State var isClearHistoryPresented = false
   @State var copiedItemID: UUID?
+  @StateObject var checklist = SetupChecklist()
+  @State var isGettingStartedPresented = false
+  /// Set once the user has closed «Начало работы» or finished it; after that
+  /// it no longer opens by itself, and the Dictation tab shows a card instead.
+  @AppStorage("onboarding.finished") var onboardingFinished = false
 
   var body: some View {
     TabView(selection: $selectedScreen) {
@@ -33,6 +39,20 @@ struct ContentView: View {
     }
     .onChange(of: configuration.historyRetentionDays) { _, _ in
       relay.applyHistoryRetention()
+    }
+    .task { presentGettingStartedIfNeeded() }
+    .onChange(of: scenePhase) { _, phase in
+      if phase == .active { checklist.refresh(store: relay.store) }
+    }
+    .sheet(isPresented: $isGettingStartedPresented) {
+      NavigationStack {
+        GettingStartedScreen(
+          configuration: configuration, checklist: checklist, store: relay.store
+        ) {
+          onboardingFinished = true
+          isGettingStartedPresented = false
+        }
+      }
     }
     .accessibilityHidden(relay.isKeyboardHandoffActive)
     .overlay {
@@ -84,6 +104,25 @@ struct ContentView: View {
     } message: {
       Text("Готовый текст будет удалён с iPhone. Сохранённые аудиозаписи останутся.")
     }
+  }
+}
+
+extension ContentView {
+  var setupProgress: SetupProgress { checklist.progress(configuration) }
+
+  func presentGettingStartedIfNeeded() {
+    checklist.refresh(store: relay.store)
+    if setupProgress.isComplete {
+      onboardingFinished = true
+      return
+    }
+    let environment = ProcessInfo.processInfo.environment
+    let isAutomatedRun =
+      environment["XCTestConfigurationFilePath"] != nil
+      || environment["VELIKIY_MOGUCHIY_VISUAL_TEST_SCENARIO"] != nil
+      || environment["VELIKIY_MOGUCHIY_VISUAL_TEST_TAB"] != nil
+    guard !onboardingFinished, !relay.isKeyboardHandoffActive, !isAutomatedRun else { return }
+    isGettingStartedPresented = true
   }
 }
 

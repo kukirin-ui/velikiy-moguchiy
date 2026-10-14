@@ -3,6 +3,16 @@ import UIKit
 
 extension ContentView {
   var setupScreen: some View {
+    KeyboardSetupScreen(checklist: checklist, store: relay.store)
+  }
+}
+
+/// Adding the keyboards and Full Access, with each step ticked off live.
+struct KeyboardSetupScreen: View {
+  @ObservedObject var checklist: SetupChecklist
+  let store: SharedRelayStore
+
+  var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 28) {
         VStack(alignment: .leading, spacing: 14) {
@@ -14,20 +24,43 @@ extension ContentView {
           Text("Добавьте две клавиатуры «Великий & Могучий» один раз, и они всегда под рукой: глобус переключает язык, как у системной клавиатуры.")
             .foregroundStyle(.secondary)
         }
+        Button(action: openAppSettings) {
+          Label("Открыть настройки iOS", systemImage: "gear")
+            .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 9)
+        }
+        .buttonStyle(.glassProminent)
+        .accessibilityIdentifier("open-keyboard-settings-button")
         VStack(spacing: 24) {
-          instruction(1, "Добавьте клавиатуры", "Настройки → Основные → Клавиатура → Клавиатуры → Новые клавиатуры. Выберите «Великий & Могучий RU» и «Великий & Могучий EN».")
-          instruction(2, "Разрешите полный доступ", "Откройте каждую из двух клавиатур в списке и включите «Разрешить полный доступ»: так клавиатура связывается с приложением, которое записывает голос.")
-          instruction(3, "Включите приём", "Откройте «Великий & Могучий» и включите приём. В любом поле ввода нажмите на глобус, чтобы переключить RU и EN, а затем на микрофон, чтобы диктовать.")
+          SetupStepRow(
+            number: 1,
+            title: "Добавьте клавиатуры",
+            detail: keyboardsDetail,
+            isDone: progress.keyboardAdded
+          )
+          SetupStepRow(
+            number: 2,
+            title: "Разрешите полный доступ",
+            detail: fullAccessDetail,
+            isDone: progress.fullAccess
+          )
+          SetupStepRow(
+            number: 3,
+            title: "Попробуйте",
+            detail: "Откройте поле ниже, нажмите на глобус и выберите «Великий & Могучий RU». Галочки выше отметятся сами, как только клавиатура появится.",
+            isDone: false
+          )
         }
         .padding(22)
         .background(OldRus.vellum, in: .rect(cornerRadius: 26))
-        Button(action: openSystemSettings) {
-          Text("Открыть настройки").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 9)
+        NavigationLink {
+          KeyboardTryoutView()
+        } label: {
+          Label("Попробовать клавиатуру", systemImage: "text.cursor")
+            .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 9)
         }
-        .buttonStyle(.glassProminent)
-        NavigationLink("Попробовать клавиатуру") { KeyboardTryoutView() }
-          .frame(maxWidth: .infinity)
-        Text("Полный доступ нужен, чтобы клавиатура обменивалась текстом и командами с приложением. Ключ API остаётся в приложении.")
+        .buttonStyle(.glass)
+        .accessibilityIdentifier("keyboard-tryout-link")
+        Text("Зачем полный доступ: через него клавиатура передаёт приложению команды «начать» и «остановить» и получает готовый текст. Голос записывает и отправляет в DashScope только приложение; в коде клавиатуры нет сетевых запросов, набранный текст никуда не уходит.")
           .font(.footnote).foregroundStyle(.secondary)
       }
       .frame(maxWidth: 580)
@@ -37,15 +70,66 @@ extension ContentView {
     .background(OldRus.page.ignoresSafeArea())
     .navigationTitle("Настройка клавиатур")
     .navigationBarTitleDisplayMode(.inline)
+    .task { await refreshWhileVisible() }
   }
 
-  func instruction(_ number: Int, _ title: String, _ detail: String) -> some View {
+  private var progress: SetupProgress {
+    SetupProgress(
+      hasKey: true, keyVerified: true, microphone: .granted,
+      addedKeyboards: checklist.addedKeyboards, totalKeyboards: checklist.totalKeyboards,
+      keyboardReported: checklist.keyboardReported)
+  }
+
+  private var keyboardsDetail: String {
+    let path = "Нажмите «Открыть настройки iOS» → «Клавиатуры» и включите «Великий & Могучий RU» и «Великий & Могучий EN». Или: Основные → Клавиатура → Клавиатуры → Новые клавиатуры."
+    guard let added = checklist.addedKeyboards, added > 0 else { return path }
+    if added >= checklist.totalKeyboards { return "Обе клавиатуры добавлены." }
+    return "Добавлена \(added) из \(checklist.totalKeyboards). \(path)"
+  }
+
+  private var fullAccessDetail: String {
+    progress.fullAccess
+      ? "Клавиатура вышла на связь с приложением: полный доступ включён."
+      : "Там же, в «Клавиатурах», включите «Полный доступ». Отметка появится, когда клавиатура впервые откроется с доступом."
+  }
+
+  private func openAppSettings() {
+    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+    UIApplication.shared.open(url)
+  }
+
+  private func refreshWhileVisible() async {
+    while !Task.isCancelled {
+      checklist.refresh(store: store)
+      try? await Task.sleep(for: .seconds(1))
+    }
+  }
+}
+
+struct SetupStepRow: View {
+  let number: Int
+  let title: String
+  let detail: String
+  let isDone: Bool
+
+  var body: some View {
     HStack(alignment: .top, spacing: 14) {
-      Text("\(number)")
-        .font(.subheadline.weight(.semibold))
-        .foregroundStyle(OldRus.cinnabar)
-        .frame(width: 30, height: 30)
-        .background(OldRus.cinnabar.opacity(0.08), in: .circle)
+      ZStack {
+        if isDone {
+          Image(systemName: "checkmark")
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(.white)
+            .frame(width: 30, height: 30)
+            .background(OldRus.cinnabar, in: .circle)
+        } else {
+          Text("\(number)")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(OldRus.cinnabar)
+            .frame(width: 30, height: 30)
+            .background(OldRus.cinnabar.opacity(0.08), in: .circle)
+        }
+      }
+      .contentTransition(.symbolEffect(.replace))
       VStack(alignment: .leading, spacing: 6) {
         Text(title).font(.headline)
         Text(detail).font(.subheadline).foregroundStyle(.secondary)
@@ -53,6 +137,8 @@ extension ContentView {
       }
       Spacer(minLength: 0)
     }
+    .accessibilityElement(children: .combine)
+    .accessibilityValue(isDone ? "Готово" : "Не сделано")
   }
 }
 
