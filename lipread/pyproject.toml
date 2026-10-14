@@ -18,6 +18,8 @@ dependencies = [
     "pandas",
     "tqdm==4.67.1",
     "pillow==11.3.0",
+    # ffmpeg для кадров с камеры у пользователей приложения без Homebrew (режим «губы», mac/ SPLipsRuntime).
+    "imageio-ffmpeg==0.6.0",
     # Для рекордера: выбор встроенной камеры (как в Lipflow), только macOS.
     "pyobjc-framework-avfoundation>=10.3; sys_platform == 'darwin'",
 ]

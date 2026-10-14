@@ -58,8 +58,12 @@ def pick_device(name: str | None = None) -> str:
     return "cpu"
 
 
-def _load_ckpt(path, device):
-    # mmap: model.pth from the authors also carries 2.3 GB of optimizer state, which is then never read into RAM
+def _load_ckpt(path, device, authors_model=False):
+    # mmap: model.pth from the authors also carries 2.3 GB of optimizer state, which is then never read into RAM.
+    # Only tensors: a pickled object in a downloaded checkpoint could run code. The one exception is the
+    # authors' model.pth, whose SHA-256 the download pins (download_weights.sh, the Mac app).
+    if not authors_model:
+        return torch.load(path, map_location=device, weights_only=True, mmap=True)
     try:
         return torch.load(path, map_location=device, weights_only=True, mmap=True)
     except Exception as e:  # чекпойнт с не-тензорными объектами
@@ -120,7 +124,8 @@ class MultiVSR:
             for p in (ckpt, venc_ckpt):
                 if not Path(p).exists():
                     raise SystemExit(f"Нет файла весов {p}. См. README (раздел про скачивание весов).")
-            sd = _load_ckpt(ckpt, "cpu")["state_dict"]
+            authors_model = Path(ckpt).resolve() == DEFAULT_CKPT.resolve()
+            sd = _load_ckpt(ckpt, "cpu", authors_model=authors_model)["state_dict"]
             self.model.load_state_dict({(k[7:] if k.startswith("module.") else k): v for k, v in sd.items()})
             del sd
             sd = _load_ckpt(venc_ckpt, "cpu")["state_dict"]
