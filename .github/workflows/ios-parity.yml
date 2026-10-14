@@ -63,7 +63,19 @@ jobs:
         # Builds the app, our keyboards and the parity host for the simulator.
         # Apple's keyboards are photographed in the same run when the runner's
         # iOS has no references in Tests/Reference/Apple/simulator yet.
-        run: Scripts/parity/parity.sh
+        # The number pad is calibrated per iOS release (iOS 26.5 moved Apple's
+        # number keys about 3 pt in from the edges), so it is checked only on an
+        # iOS whose references are committed; the other layouts are always checked.
+        run: |
+          runtime=$(xcrun simctl list runtimes -j | python3 -c '
+          import json, sys
+          rs = [r for r in json.load(sys.stdin)["runtimes"] if r["isAvailable"] and r["platform"] == "iOS"]
+          print(sorted(rs, key=lambda r: [int(p) for p in r["version"].split(".")])[-1]["identifier"].rsplit(".", 1)[-1])')
+          if [ ! -d "Tests/Reference/Apple/simulator/iPhone16-$runtime" ]; then
+            echo "::notice::No committed references for $runtime: the number pad is not checked"
+            export PARITY_CASES="text:return:1,url:return:1,web:go:1,web:go:0,email:return:1"
+          fi
+          Scripts/parity/parity.sh
 
       - name: Upload the parity report
         if: always()
@@ -74,3 +86,13 @@ jobs:
             ios/build/parity/report
             ios/build/parity/*.log
           if-no-files-found: warn
+
+      - name: Upload Apple's keyboards photographed on this iOS
+        # Not in git yet: the data for calibrating a new iOS release and for
+        # committing its references.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-keyboard-references
+          path: ios/Tests/Reference/Apple/simulator
+          if-no-files-found: ignore
