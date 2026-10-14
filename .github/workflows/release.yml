@@ -49,6 +49,7 @@ on:
     paths:
       - tools/release/**
       - tools/text_review.py
+      - tools/text_review/**
       - .github/release-notes.md
       - .github/workflows/release.yml
 
