@@ -18,6 +18,7 @@ pub struct Tray {
     data: NOTIFYICONDATAW,
     idle: HICON,
     recording: HICON,
+    added: bool,
 }
 
 fn load_icon(id: u16) -> HICON {
@@ -49,6 +50,7 @@ impl Tray {
             data,
             idle,
             recording,
+            added: false,
         };
         tray.readd();
         tray
@@ -56,11 +58,15 @@ impl Tray {
 
     /// Adds the icon again after Explorer restarted.
     pub fn readd(&mut self) {
-        unsafe {
-            if !Shell_NotifyIconW(NIM_ADD, &self.data).as_bool() {
-                log::warn!("could not add the tray icon");
-            }
+        self.added = unsafe { Shell_NotifyIconW(NIM_ADD, &self.data).as_bool() };
+        if !self.added {
+            log::warn!("could not add the tray icon");
         }
+    }
+
+    /// The last attempt to add the icon succeeded.
+    pub fn added(&self) -> bool {
+        self.added
     }
 
     pub fn set_recording(&mut self, recording: bool, tooltip: &str) {

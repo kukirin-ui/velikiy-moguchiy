@@ -10,7 +10,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetCursorPos, GetMessageW, KillTimer, PostMessageW, PostQuitMessage, RegisterClassExW,
     RegisterWindowMessageW, SetForegroundWindow, SetTimer, TrackPopupMenu, TranslateMessage,
     MF_GRAYED, MF_SEPARATOR, MF_STRING, MSG, TPM_BOTTOMALIGN, TPM_NONOTIFY, TPM_RETURNCMD,
-    TPM_RIGHTBUTTON, WM_APP, WM_LBUTTONUP, WM_NULL, WM_RBUTTONUP, WM_TIMER, WNDCLASSEXW,
+    TPM_RIGHTBUTTON, WM_APP, WM_CLOSE, WM_LBUTTONUP, WM_NULL, WM_RBUTTONUP, WM_TIMER, WNDCLASSEXW,
     WS_EX_TOOLWINDOW, WS_POPUP,
 };
 
@@ -30,6 +30,9 @@ pub enum ShellEvent {
     MenuCommand(u32),
     /// Explorer restarted; the tray icon has to be added again.
     TaskbarCreated,
+    /// Another program sent `WM_CLOSE` to the hidden window (the smoke test
+    /// does): quit the way the tray menu does.
+    CloseRequested,
 }
 
 pub enum MenuItem {
@@ -238,6 +241,10 @@ unsafe extern "system" fn wnd_proc(
         }
         WM_TIMER => {
             dispatch(hwnd, ShellEvent::Timer(wparam.0));
+            LRESULT(0)
+        }
+        WM_CLOSE => {
+            dispatch(hwnd, ShellEvent::CloseRequested);
             LRESULT(0)
         }
         WM_TRAY => {

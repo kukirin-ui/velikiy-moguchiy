@@ -409,20 +409,26 @@ impl App {
                     let log = logfile::log_path(&config::config_dir());
                     window::open_path(&log.to_string_lossy());
                 }
-                MENU_QUIT => {
-                    let now = self.host.now_ms;
-                    self.controller
-                        .on_gesture(&mut self.host, Gesture::Cancel, now);
-                    if let Some(w) = self.settings_window.take() {
-                        w.form.close();
-                    }
-                    shell::quit();
-                }
+                MENU_QUIT => self.quit(),
                 _ => {}
             },
             ShellEvent::TaskbarCreated => self.host.tray.readd(),
+            ShellEvent::CloseRequested => {
+                log::info!("asked to close");
+                self.quit();
+            }
         }
         self.update_timer();
+    }
+
+    fn quit(&mut self) {
+        let now = self.host.now_ms;
+        self.controller
+            .on_gesture(&mut self.host, Gesture::Cancel, now);
+        if let Some(w) = self.settings_window.take() {
+            w.form.close();
+        }
+        shell::quit();
     }
 
     fn on_event(&mut self, event: AppEvent) {
