@@ -2,3 +2,8 @@
 # linking them into a /MD binary fails with LNK2038.
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# CMake 4 refuses the cmake_minimum_required(VERSION 3.1) of the libopus that
+# audiopus_sys builds; this lets it configure with today's policies.
+[env]
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"
