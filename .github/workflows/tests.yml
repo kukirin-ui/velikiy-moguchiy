@@ -1,8 +1,9 @@
 name: Tests
 
-# Cheap Linux checks on every push and pull request. Each product's job runs only
-# when its files (or this workflow) changed. The Apple builds are in
-# build-apple.yml and run on demand, because macOS minutes are scarce.
+# Cheap Linux checks on every push and pull request, plus the Windows app on a
+# Windows runner. Each product's job runs only when its files (or this workflow)
+# changed. The Apple builds are in build-apple.yml and run on demand, because
+# macOS minutes are scarce.
 
 on:
   push:
@@ -25,6 +26,7 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       federated: ${{ steps.filter.outputs.federated }}
       lipread: ${{ steps.filter.outputs.lipread }}
+      windows: ${{ steps.filter.outputs.windows }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -43,6 +45,12 @@ jobs:
             lipread:
               - "lipread/**"
               - "tools/mem_guard.py"
+              - ".github/workflows/tests.yml"
+            windows:
+              - "windows/**"
+              - "mac/Cargo.toml"
+              - "mac/velikiy-moguchiy-asr/**"
+              - "mac/velikiy-moguchiy-core/**"
               - ".github/workflows/tests.yml"
 
   rust:
@@ -63,6 +71,34 @@ jobs:
           workspaces: mac
       - name: Test
         run: cargo test --workspace --no-default-features --features velikiy-moguchiy-core/wetype-offline
+
+  windows:
+    name: Windows app
+    needs: changes
+    if: needs.changes.outputs.windows == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: windows
+      - name: Format
+        run: cargo fmt -p velikiy-moguchiy-windows -p velikiy-moguchiy-win32 --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets
+      - name: Test
+        # The core is built with the local sherpa-onnx engine, as in the release.
+        run: cargo test --workspace
+      - name: Build
+        run: cargo build --workspace
 
   federated:
     name: Federated (pytest)

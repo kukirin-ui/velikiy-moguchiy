@@ -1,0 +1,75 @@
+name: Build Windows app
+
+# Builds the Windows app (windows/, unsigned) and uploads
+# VelikiyMoguchiy-Windows-x64.zip as an artifact.
+#   - v* tags: release.yml calls this workflow and attaches the zip to the draft;
+#   - win-v* tags and manual runs (Actions > Build Windows app > Run workflow):
+#     the artifact only.
+# Pull requests are built and tested by tests.yml.
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    tags: ["win-v*"]
+
+concurrency:
+  group: build-windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows app
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: windows
+          key: x86_64-pc-windows-msvc-release
+
+      - name: Version from the tag
+        # v0.1.0, win-v0.1.0 -> 0.1.0 in Cargo.toml and the exe's file properties
+        if: github.ref_type == 'tag'
+        run: |
+          VERSION="${GITHUB_REF_NAME#win-}"; VERSION="${VERSION#v}"; VERSION="${VERSION%%-*}"
+          IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          sed -i "s/0,1,0,0/$MAJOR,$MINOR,$PATCH,0/g; s/\"0\.1\.0\"/\"$VERSION\"/g" app/resources/app.rc
+          echo "Windows app version $VERSION"
+
+      - name: Test
+        run: cargo test --release --workspace
+
+      - name: Build
+        run: cargo build --release --workspace
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          DIST="$RUNNER_TEMP/VelikiyMoguchiy"
+          mkdir -p "$DIST"
+          cp target/release/VelikiyMoguchiy.exe "$DIST/"
+          cp README.md "$DIST/README.md"
+          cp ../LICENSE "$DIST/LICENSE.txt"
+          cp ../THIRD_PARTY.md "$DIST/THIRD_PARTY.md"
+          cd "$RUNNER_TEMP"
+          7z a -tzip "$GITHUB_WORKSPACE/VelikiyMoguchiy-Windows-x64.zip" VelikiyMoguchiy >/dev/null
+          ls -l "$GITHUB_WORKSPACE/VelikiyMoguchiy-Windows-x64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VelikiyMoguchiy-Windows-x64
+          path: VelikiyMoguchiy-Windows-x64.zip
+          if-no-files-found: error

@@ -1,9 +1,9 @@
 name: Release
 
 # A v* tag (for example v0.1.0) builds the Mac app and the unsigned IPA through
-# build-apple.yml and the Android APKs through build-android.yml, and creates a
-# DRAFT GitHub release with the files, their SHA-256 checksums and the Russian
-# release notes from .github/release-notes.md.
+# build-apple.yml, the Android APKs through build-android.yml and the Windows app
+# through build-windows.yml, and creates a DRAFT GitHub release with the files,
+# their SHA-256 checksums and the Russian release notes from .github/release-notes.md.
 # Nothing is published until the draft is published by hand on the Releases
 # page. Tags are made by the owner; this workflow never creates one.
 
@@ -32,9 +32,13 @@ jobs:
     # The release APK is signed with the ANDROID_* secrets when they exist.
     secrets: inherit
 
+  windows:
+    name: Build Windows
+    uses: ./.github/workflows/build-windows.yml
+
   draft:
     name: Draft release
-    needs: [build, android]
+    needs: [build, android, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -54,7 +58,8 @@ jobs:
           test -f VelikiyMoguchiy-macOS-arm64.zip
           test -f VelikiyMoguchiy-iOS-unsigned.ipa
           test -f VelikiyMoguchiy-Android-debug.apk
-          sha256sum VelikiyMoguchiy-macOS-arm64.zip VelikiyMoguchiy-iOS-unsigned.ipa VelikiyMoguchiy-Android*.apk > SHA256SUMS.txt
+          test -f VelikiyMoguchiy-Windows-x64.zip
+          sha256sum VelikiyMoguchiy-macOS-arm64.zip VelikiyMoguchiy-iOS-unsigned.ipa VelikiyMoguchiy-Android*.apk VelikiyMoguchiy-Windows-x64.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
           cd ..
           VERSION="${GITHUB_REF_NAME#v}"
@@ -66,7 +71,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          FILES=(dist/VelikiyMoguchiy-macOS-arm64.zip dist/VelikiyMoguchiy-iOS-unsigned.ipa dist/VelikiyMoguchiy-Android*.apk dist/SHA256SUMS.txt)
+          FILES=(dist/VelikiyMoguchiy-macOS-arm64.zip dist/VelikiyMoguchiy-iOS-unsigned.ipa dist/VelikiyMoguchiy-Android*.apk dist/VelikiyMoguchiy-Windows-x64.zip dist/SHA256SUMS.txt)
           TITLE="«Великий & Могучий» ${TAG#v}"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             # A re-run: refresh the files and notes, keep whatever state the release is in.
