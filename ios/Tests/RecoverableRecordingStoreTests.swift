@@ -96,15 +96,4 @@ final class RecoverableRecordingStoreTests: XCTestCase {
     XCTAssertFalse(FileManager.default.fileExists(atPath: unfinished.path))
     XCTAssertFalse(FileManager.default.fileExists(atPath: ambiguousLegacy.path))
   }
-
-  func testKeyboardMessageDistinguishesTimeoutAndOffline() {
-    XCTAssertEqual(
-      RecoverableRecordingStatus.keyboardMessage(for: URLError(.timedOut)),
-      "Время вышло — запись сохранена. Повторите в приложении «Великий & Могучий»."
-    )
-    XCTAssertEqual(
-      RecoverableRecordingStatus.keyboardMessage(for: URLError(.notConnectedToInternet)),
-      "Нет соединения — запись сохранена. Повторите в приложении «Великий & Могучий»."
-    )
-  }
 }

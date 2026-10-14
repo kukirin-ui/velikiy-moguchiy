@@ -182,6 +182,9 @@ extension RelayController {
             usedLiveStream = true
           } catch is CancellationError {
             throw CancellationError()
+          } catch DashScopeSpeechError.noSpeech {
+            // The replay would send the same silent audio and fail the same way.
+            throw DashScopeSpeechError.noSpeech
           } catch {
             NSLog(
               "LIVE_STREAM_FALLBACK request=%@ reason=%@",
@@ -248,13 +251,20 @@ extension RelayController {
         refreshRecoverableRecordings()
         return
       } catch {
-        recoveryStore.markFailed(
-          id: recoverableRecording.id,
-          message: error.localizedDescription
+        let failure = DictationFailure(error)
+        NSLog(
+          "DICTATION_FAILED request=%@ code=%@ error=%@",
+          requestID,
+          failure.code,
+          String(describing: error)
         )
-        refreshRecoverableRecordings()
+        let keptRecording = keepOrDiscardFailedRecording(recoverableRecording.id, failure: failure)
         if action == .note {
-          failNoteCapture("\(error.localizedDescription)\nЗапись сохранена, её можно повторить из списка.")
+          failNoteCapture(
+            keptRecording
+              ? "\(failure.detail)\nЗапись сохранена, её можно повторить в «Истории»."
+              : "\(failure.detail)\nЗаметка не сохранена."
+          )
         }
         guard generation == transcriptionGeneration, isRelayRunning else { return }
         if applyPendingAudioRecoveryFailureIfNeeded() {
@@ -262,13 +272,31 @@ extension RelayController {
         }
         publish(
           .error,
-          message: RecoverableRecordingStatus.keyboardMessage(for: error),
+          message: failure.keyboardText,
           activeRequestID: requestID,
           activeDictationAction: action
         )
+        // The keyboard row has room for one line; the app shows the whole advice.
+        statusMessage = failure.detail
         markRelayActivityAndScheduleIdleShutdown()
       }
     }
+  }
+
+  /// Returns whether the recording is still kept for a retry.
+  @discardableResult
+  func keepOrDiscardFailedRecording(_ id: UUID, failure: DictationFailure) -> Bool {
+    defer { refreshRecoverableRecordings() }
+    if !failure.keepsRecording {
+      do {
+        try recoveryStore.remove(id: id)
+        return false
+      } catch {
+        NSLog("SILENT_RECORDING_REMOVE_FAILED error=%@", error.localizedDescription)
+      }
+    }
+    recoveryStore.markFailed(id: id, message: failure.detail)
+    return true
   }
 
   func fallbackResult(
@@ -299,7 +327,7 @@ extension RelayController {
     if action == .note { notePreviewText = cleaned }
 
     let preview = String(cleaned.prefix(100))
-    let message = "Слышу: \(preview)"
+    let message = RelayRecordingMessage.livePreviewPrefix + preview
     setLocalStatus(.recording, message: message)
     store.publishStatus(
       .recording,

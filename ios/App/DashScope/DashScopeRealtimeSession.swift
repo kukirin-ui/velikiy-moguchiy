@@ -246,7 +246,7 @@ actor DashScopeRealtimeSession {
         // A normal close after response.done is not a failure.
         if responseDone { return }
         terminalError =
-          error is DashScopeSpeechError
+          error is DashScopeSpeechError || (error as NSError).domain == NSURLErrorDomain
           ? error
           : DashScopeSpeechError.connectionClosed("сетевое соединение прервано.")
         return
@@ -275,8 +275,8 @@ actor DashScopeRealtimeSession {
         responseTextDoneAt = Date()
       case .responseDone:
         responseDone = true
-      case .serviceError(let message):
-        terminalError = DashScopeSpeechError.service(message)
+      case .serviceError(let code, let message):
+        terminalError = DashScopeSpeechError.provider(code: code, message: message)
       }
     }
   }
@@ -352,7 +352,7 @@ actor DashScopeRealtimeSession {
     // Committing an empty or silent buffer makes the model invent text.
     guard sentAudioByteCount >= PCM16StreamChunker.targetBytesPerChunk, sawLikelySpeech else {
       await close(code: .normalClosure)
-      throw DashScopeSpeechError.emptyResult
+      throw DashScopeSpeechError.noSpeech
     }
 
     do {

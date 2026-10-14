@@ -111,22 +111,24 @@ extension RelayController {
         )
         refreshRecoverableRecordings()
       } catch {
-        recoveryStore.markFailed(
-          id: recording.id,
-          message: error.localizedDescription
+        let failure = DictationFailure(error)
+        NSLog(
+          "RETRY_FAILED code=%@ error=%@",
+          failure.code,
+          String(describing: error)
         )
-        refreshRecoverableRecordings()
+        let keptRecording = keepOrDiscardFailedRecording(recording.id, failure: failure)
+        let silentMessage = "В записи не слышно речи — она удалена"
         if isRelayRunning {
           publish(
             .error,
-            message: RecoverableRecordingStatus.keyboardMessage(for: error),
+            message: keptRecording ? failure.keyboardText : silentMessage,
             activeRequestID: retryRequestID,
             activeDictationAction: recording.action
           )
           markRelayActivityAndScheduleIdleShutdown()
-        } else {
-          statusMessage = RecoverableRecordingStatus.keyboardMessage(for: error)
         }
+        statusMessage = keptRecording ? failure.detail : silentMessage
       }
     }
   }

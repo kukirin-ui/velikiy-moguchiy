@@ -71,7 +71,7 @@ final class DashScopeProtocolTests: XCTestCase {
     XCTAssertEqual(try events(#"{"type":"response.created"}"#), [])
     XCTAssertEqual(
       try events(#"{"type":"error","error":{"message":"Invalid voice"}}"#),
-      [.serviceError("Invalid voice")])
+      [.serviceError(code: nil, message: "Invalid voice")])
     XCTAssertThrowsError(try events("[]"))
   }
 
@@ -152,7 +152,7 @@ final class DashScopeRealtimeSessionTests: XCTestCase {
     do {
       _ = try await session.finish()
       XCTFail("silence must not produce text")
-    } catch DashScopeSpeechError.emptyResult {
+    } catch DashScopeSpeechError.noSpeech {
     }
     XCTAssertFalse(socket.messageTypes.contains("input_audio_buffer.commit"))
   }
@@ -164,7 +164,8 @@ final class DashScopeRealtimeSessionTests: XCTestCase {
     do {
       _ = try await session.finish()
       XCTFail("expected a service error")
-    } catch DashScopeSpeechError.service(let message) {
+    } catch DashScopeSpeechError.provider(let code, let message) {
+      XCTAssertNil(code)
       XCTAssertEqual(message, "Invalid voice")
     }
   }

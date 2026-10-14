@@ -119,7 +119,7 @@ extension KeyboardViewController {
     case .recording:
       let livePreview =
         snapshot.activeRequestID == activeRequestID
-          && snapshot.message.hasPrefix("Слышу: ")
+          && RelayRecordingMessage.isShownWhileRecording(snapshot.message)
         ? snapshot.message
         : nil
       setStatus(livePreview ?? "Слушаю… микрофон вставляет текст, × отменяет", color: .systemRed)

@@ -18,6 +18,16 @@ enum RelayOfflineReason: String, Codable {
   case needsApp
 }
 
+/// Relay messages the keyboard shows verbatim while recording.
+enum RelayRecordingMessage {
+  static let livePreviewPrefix = "Слышу: "
+  static let offline = "Нет интернета — запишу, распознаю позже"
+
+  static func isShownWhileRecording(_ message: String) -> Bool {
+    message.hasPrefix(livePreviewPrefix) || message == offline
+  }
+}
+
 struct RelayCommandEnvelope: Equatable {
   let sequence: Int
   let command: RelayCommand

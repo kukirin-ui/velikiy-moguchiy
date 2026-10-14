@@ -57,7 +57,7 @@ enum AudioCaptureError: LocalizedError {
   var errorDescription: String? {
     switch self {
     case .sharedContainerUnavailable:
-      return "Общий контейнер App Group недоступен. Проверьте подпись и capability App Groups."
+      return "Общая папка приложения и клавиатуры недоступна. Переподпишите приложение вместе с клавиатурами: им нужна общая группа App Group."
     case .invalidInputFormat:
       return "Микрофон вернул неподдерживаемый формат звука."
     case .relayNotRunning:

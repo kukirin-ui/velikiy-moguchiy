@@ -207,6 +207,49 @@ final class RelayControllerTests: XCTestCase {
     XCTAssertNil(store.snapshot().transcript)
   }
 
+  func testRetryOfASilentRecordingDeletesItInsteadOfKeepingAFalseAlarm() async throws {
+    let (controller, _) = try makeController()
+    let recording = try stageRecording(in: controller, amplitude: 0)
+    controller.retryRecording(recording)
+    try await waitForRetry(controller)
+    XCTAssertTrue(controller.recoveryStore.recordings.isEmpty)
+    XCTAssertTrue(controller.history.isEmpty)
+    XCTAssertEqual(controller.statusMessage, "В записи не слышно речи — она удалена")
+  }
+
+  func testRetryFailureKeepsTheRecordingWithActionableAdvice() async throws {
+    let (controller, _) = try makeController(
+      socketScript: .init(errorOnResponse: "Access denied, please make sure your account is in good standing."))
+    let recording = try stageRecording(in: controller, amplitude: 0.4)
+    controller.retryRecording(recording)
+    try await waitForRetry(controller)
+    let kept = try XCTUnwrap(controller.recoveryStore.recordings.first)
+    XCTAssertEqual(kept.lastError, DictationFailure(kind: .account, code: "svc").detail)
+    XCTAssertEqual(controller.statusMessage, kept.lastError)
+  }
+
+  private func stageRecording(
+    in controller: RelayController, amplitude: Double
+  ) throws -> RecoverableRecording {
+    let requestID = UUID().uuidString
+    let recordings = directoryURL.appendingPathComponent("Recordings", isDirectory: true)
+    try FileManager.default.createDirectory(at: recordings, withIntermediateDirectories: true)
+    let url = recordings.appendingPathComponent("completed-transcribe-ru-\(requestID).wav")
+    try TestAudio.writeWAV(to: url, seconds: 1.0, sampleRate: 44_100, amplitude: amplitude)
+    return try controller.recoveryStore.stage(
+      CapturedAudioSegment(
+        requestID: requestID, url: url, startedAt: Date().addingTimeInterval(-2), endedAt: Date()),
+      action: .transcribe, languageCode: "ru"
+    )
+  }
+
+  private func waitForRetry(_ controller: RelayController) async throws {
+    for _ in 0..<200 where controller.retryingRecordingID != nil {
+      try await Task.sleep(for: .milliseconds(50))
+    }
+    XCTAssertNil(controller.retryingRecordingID)
+  }
+
   func testHistoryRetentionDefaultsToThirtyDaysAndPersistsChanges() throws {
     let (controller, _) = try makeController()
     XCTAssertEqual(controller.configuration.historyRetentionDays, 30)

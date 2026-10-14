@@ -118,8 +118,10 @@ enum TestAudio {
     return data
   }
 
-  static func writeWAV(to url: URL, seconds: Double, sampleRate: Int) throws {
-    let pcm = pcm16(seconds: seconds, sampleRate: sampleRate)
+  static func writeWAV(
+    to url: URL, seconds: Double, sampleRate: Int, amplitude: Double = 0.4
+  ) throws {
+    let pcm = pcm16(seconds: seconds, sampleRate: sampleRate, amplitude: amplitude)
     var header = Data()
     func append32(_ value: UInt32) {
       var v = value.littleEndian

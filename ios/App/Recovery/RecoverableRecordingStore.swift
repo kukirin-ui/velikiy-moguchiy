@@ -64,7 +64,7 @@ final class RecoverableRecordingStore {
         languageCode: languageCode,
         createdAt: segment.endedAt,
         duration: max(0, segment.duration),
-        lastError: "Waiting for transcription",
+        lastError: "Ждёт распознавания",
         retryCount: recordings[index].retryCount,
         transcriptSaved: recordings[index].transcriptSaved
       )
@@ -82,7 +82,7 @@ final class RecoverableRecordingStore {
       languageCode: languageCode,
       createdAt: segment.endedAt,
       duration: max(0, segment.duration),
-      lastError: "Waiting for transcription",
+      lastError: "Ждёт распознавания",
       retryCount: 0,
       transcriptSaved: nil
     )
@@ -127,7 +127,7 @@ final class RecoverableRecordingStore {
       }
       guard !fileManager.fileExists(atPath: url.path) else {
         throw RecoverableRecordingStoreError.couldNotDeleteAudio(
-          "The file is still present."
+          "Файл всё ещё на месте."
         )
       }
     }
@@ -255,26 +255,5 @@ enum RecoverableRecordingStoreError: LocalizedError {
     case .couldNotDeleteAudio(let details):
       return "Не удалось удалить сохранённое аудио. \(details)"
     }
-  }
-}
-
-enum RecoverableRecordingStatus {
-  static func keyboardMessage(for error: Error) -> String {
-    let nsError = error as NSError
-    if nsError.domain == NSURLErrorDomain {
-      switch nsError.code {
-      case NSURLErrorTimedOut:
-        return "Время вышло — запись сохранена. Повторите в приложении «Великий & Могучий»."
-      case NSURLErrorNotConnectedToInternet,
-        NSURLErrorNetworkConnectionLost,
-        NSURLErrorCannotConnectToHost,
-        NSURLErrorCannotFindHost,
-        NSURLErrorDNSLookupFailed:
-        return "Нет соединения — запись сохранена. Повторите в приложении «Великий & Могучий»."
-      default:
-        break
-      }
-    }
-    return "Не удалось распознать — запись сохранена. Повторите в приложении «Великий & Могучий»."
   }
 }

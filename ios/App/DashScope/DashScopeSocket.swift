@@ -33,7 +33,17 @@ final class URLSessionDashScopeSocket: DashScopeSocket, @unchecked Sendable {
   }
 
   func receive() async throws -> Data {
-    let message = try await task.receive()
+    let message: URLSessionWebSocketTask.Message
+    do {
+      message = try await task.receive()
+    } catch {
+      // A refused handshake surfaces as a generic URL error; the status code
+      // (401 for a wrong key or region) is only on the task's response.
+      if let response = task.response as? HTTPURLResponse, response.statusCode != 101 {
+        throw DashScopeSpeechError.rejected(httpStatus: response.statusCode)
+      }
+      throw error
+    }
     switch message {
     case .string(let text):
       return Data(text.utf8)

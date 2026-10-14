@@ -134,6 +134,8 @@ final class RelayController: ObservableObject {
 
     monitor.onChange = { [weak self] in self?.evaluatePowerConstraint() }
     configureLiveActivityControls()
+    // Start watching the network now, so the first dictation already knows.
+    _ = NetworkPathMonitor.shared
 
     capture.levelHandler = { [weak self] level in
       DispatchQueue.main.async { [weak self] in

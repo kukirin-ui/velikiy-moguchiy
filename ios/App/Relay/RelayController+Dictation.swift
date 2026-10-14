@@ -99,9 +99,13 @@ extension RelayController {
       activeDictationAction = action
       activeStartedAt = startedAt
       let listeningMessage: String
-      listeningMessage = action == .note
-        ? "Записываю заметку…"
-        : "Слушаю… нажмите микрофон ещё раз, когда закончите"
+      if NetworkPathMonitor.shared.isOffline {
+        listeningMessage = RelayRecordingMessage.offline
+      } else {
+        listeningMessage = action == .note
+          ? "Записываю заметку…"
+          : "Слушаю… нажмите микрофон ещё раз, когда закончите"
+      }
       publish(
         .recording,
         message: listeningMessage,

@@ -17,7 +17,7 @@ struct DashScopeRecordingTranscriber: Sendable {
     let chunks = try await Task.detached(priority: .userInitiated) {
       try WAVPCMConverter.pcm16kChunks(from: url)
     }.value
-    guard !chunks.isEmpty else { throw DashScopeSpeechError.emptyResult }
+    guard !chunks.isEmpty else { throw DashScopeSpeechError.noSpeech }
 
     let session = DashScopeRealtimeSession(language: language, socketFactory: socketFactory)
     do {
