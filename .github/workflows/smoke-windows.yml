@@ -1,0 +1,77 @@
+name: Windows smoke
+
+# Runs the Windows app for real on a Windows runner (tests.yml only builds and
+# unit-tests it). The app is built with the `smoke` feature: a generated tone
+# instead of the microphone, the dictation key accepted from SendInput and a
+# startup report. windows/tools/smoke/smoke.ps1 then checks, with a temporary
+# HOME and config.yaml and no real API key:
+#   - startup: the process stays alive, the tray icon and the keyboard hook are
+#     in place, the settings come from the temporary config, the key is sealed;
+#   - dictation: F9 held over Notepad, recognized by a local fake DashScope
+#     server (windows/tools/smoke/fake_dashscope.py), the phrase lands in Notepad;
+#   - exit: WM_CLOSE to the app's window, exit code 0.
+# Logs, the report and screenshots are uploaded when it fails.
+
+on:
+  pull_request:
+    paths:
+      - "windows/**"
+      - "mac/velikiy-moguchiy-core/**"
+      - "mac/velikiy-moguchiy-asr/**"
+      - "mac/Cargo.toml"
+      - ".github/workflows/smoke-windows.yml"
+  schedule:
+    - cron: "40 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-windows-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Windows smoke
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: windows
+          key: smoke
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Clippy with the smoke hooks
+        run: cargo clippy -p velikiy-moguchiy-windows --features smoke --all-targets -- -D warnings
+
+      - name: Build
+        run: cargo build --release -p velikiy-moguchiy-windows --features smoke
+
+      - name: Fake DashScope server
+        run: python -m pip install -q websockets==13.1
+
+      - name: Smoke test
+        shell: pwsh
+        run: ./tools/smoke/smoke.ps1 -Exe target/release/VelikiyMoguchiy.exe -Work "$env:RUNNER_TEMP/smoke"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: windows-smoke-logs
+          path: ${{ runner.temp }}/smoke
+          if-no-files-found: ignore
