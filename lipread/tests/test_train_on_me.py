@@ -433,7 +433,8 @@ def test_real_mem_guard_budget_and_pause(tmp_path):
         n = 0
         while n < 400:
             n += 1
-            open({str(ticks)!r}, "w").write(str(n))
+            open({str(ticks)!r} + ".tmp", "w").write(str(n))
+            os.replace({str(ticks)!r} + ".tmp", {str(ticks)!r})  # atomic: the test never reads a half-written file
             time.sleep(0.05)
     """))
     cmd = P.guard_command([sys.executable, str(child)], TOOLS_GUARD, 36.0)
