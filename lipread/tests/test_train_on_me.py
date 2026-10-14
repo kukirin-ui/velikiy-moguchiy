@@ -251,6 +251,12 @@ R11_CASES = [
     ("Darwin", {P.APP_JOB_ENV: "1"}, ["train.py"], False),
     ("Darwin", {"LIPREAD_MAC_OK": "0"}, ["train.py"], False),
     ("Darwin", {P.APP_JOB_ENV: P.APP_JOB}, [], False),
+    # the app's lips mode: the service script only
+    ("Darwin", {P.APP_JOB_ENV: "lips-service"}, ["/x/lips/service/lips_service.py", "--port", "8766"], True),
+    ("Darwin", {P.APP_JOB_ENV: "lips-service"}, ["train.py"], False),
+    ("Darwin", {P.APP_JOB_ENV: "lips-service"}, ["evaluate.py"], False),
+    ("Darwin", {P.APP_JOB_ENV: "lips-service"}, ["../tools/mem_guard.py", "--", "python", "train.py"], False),
+    ("Darwin", {P.APP_JOB_ENV: "lips-service"}, [], False),
 ]
 
 
@@ -273,6 +279,9 @@ def test_r11_allows_exactly_the_job_scripts():
     ("train.py", {}, 1),
     ("train.py", {P.APP_JOB_ENV: P.APP_JOB}, 0),
     ("lips_service.py", {P.APP_JOB_ENV: P.APP_JOB}, 1),
+    ("lips_service.py", {P.APP_JOB_ENV: "lips-service"}, 0),
+    ("train.py", {P.APP_JOB_ENV: "lips-service"}, 1),
+    ("evaluate.py", {P.APP_JOB_ENV: "lips-service"}, 1),
 ])
 def test_memguard_exits_on_a_mac_without_the_allowance(script, env, code):
     """The real import-time check, with platform.system() pretending to be macOS."""

@@ -25,7 +25,9 @@ from __future__ import annotations
 # The owner forbids ML runs (training, recognition, evaluation) on the Mac: they go to RunPod pods.
 # Two exceptions the owner allowed: the synthetic-lips pilot, which sets LIPREAD_MAC_OK=1, and the user's own
 # «Обучить на мне» job that the Mac app starts with VELIKIY_MOGUCHIY_APP_JOB=train-on-me: only that job's scripts,
-# always under tools/mem_guard.py. tools/mem_guard.py has the same rule (tests/test_train_on_me.py keeps them equal).
+# always under tools/mem_guard.py. The app's lips mode starts lips_service.py with VELIKIY_MOGUCHIY_APP_JOB=lips-service:
+# the user's own lip reading on their Mac, that script only. tools/mem_guard.py has the same rule
+# (tests/test_train_on_me.py keeps them equal).
 import os as _os, sys as _sys, platform as _platform
 
 
@@ -35,6 +37,8 @@ def r11_allowed(system, env, argv):
     if "synth" in " ".join(argv).lower():  # the synthetic-lips pilot is allowed on the Mac
         return True
     script = _os.path.basename(argv[0]) if argv else ""
+    if env.get("VELIKIY_MOGUCHIY_APP_JOB") == "lips-service":
+        return script == "lips_service.py"
     return env.get("VELIKIY_MOGUCHIY_APP_JOB") == "train-on-me" and script in (
         "train_on_me_worker.py", "train.py", "train_e2e.py", "mem_guard.py")
 
