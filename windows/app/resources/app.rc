@@ -1,0 +1,33 @@
+#pragma code_page(65001)
+
+// Icon 1 is the program icon; both are loaded by id in win32/src/tray.rs.
+1 ICON "app.ico"
+2 ICON "recording.ico"
+
+1 24 "app.manifest"
+
+1 VERSIONINFO
+FILEVERSION 0,1,0,0
+PRODUCTVERSION 0,1,0,0
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "041904B0"
+    BEGIN
+      VALUE "CompanyName", "«Великий & Могучий»"
+      VALUE "FileDescription", "«Великий & Могучий» — голосовой ввод"
+      VALUE "FileVersion", "0.1.0"
+      VALUE "InternalName", "VelikiyMoguchiy"
+      VALUE "LegalCopyright", "MIT"
+      VALUE "OriginalFilename", "VelikiyMoguchiy.exe"
+      VALUE "ProductName", "«Великий & Могучий»"
+      VALUE "ProductVersion", "0.1.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x419, 1200
+  END
+END

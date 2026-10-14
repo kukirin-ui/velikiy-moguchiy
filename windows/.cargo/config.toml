@@ -1,0 +1,4 @@
+# The sherpa-onnx static libraries are built against the static CRT (/MT);
+# linking them into a /MD binary fails with LNK2038.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

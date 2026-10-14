@@ -1,0 +1,21 @@
+[workspace]
+members = ["app", "win32"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+repository = "https://github.com/zigansh1n/velikiy-moguchiy"
+rust-version = "1.85"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[workspace.dependencies]
+log = "0.4"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
