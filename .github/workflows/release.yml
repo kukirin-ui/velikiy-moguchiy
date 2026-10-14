@@ -6,6 +6,11 @@ name: Release
 # their SHA-256 checksums and the Russian release notes from .github/release-notes.md.
 # Nothing is published until the draft is published by hand on the Releases
 # page. Tags are made by the owner; this workflow never creates one.
+#
+# Before anything is built, the privacy guard runs on the tagged tree and the tagged commit must be
+# authored and committed by a GitHub no-reply address. After the builds, tools/scan_artifacts.py reads
+# every file in them for home folders, personal e-mails and the author's identifiers. Any finding stops
+# the release before the draft exists.
 
 on:
   push:
@@ -19,8 +24,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  privacy:
+    name: Privacy check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Guard tests
+        run: python3 -m pip install -q pytest && python3 -m pytest -q -p no:cacheprovider tools/test_privacy_guard.py tools/test_scan_artifacts.py
+      - name: Tagged tree
+        env:
+          PRIVACY_GUARD_EXTRA: ${{ secrets.PRIVACY_GUARD_EXTRA }}
+        run: python3 tools/privacy_guard.py
+      - name: Release commit
+        run: |
+          python3 tools/privacy_guard.py --commits "${GITHUB_SHA}^!" -- tools/privacy_guard.py
+          bad=$(git log -1 --format='%ae%n%ce' "$GITHUB_SHA" \
+                | grep -vE '^([0-9]+\+)?[A-Za-z0-9-]+@users\.noreply\.github\.com$|^noreply@github\.com$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::The release commit must have a GitHub no-reply address as author and committer"
+            exit 1
+          fi
+
   build:
     name: Build
+    needs: privacy
     uses: ./.github/workflows/build-apple.yml
     with:
       mac: true
@@ -28,17 +60,19 @@ jobs:
 
   android:
     name: Android
+    needs: privacy
     uses: ./.github/workflows/build-android.yml
     # The release APK is signed with the ANDROID_* secrets when they exist.
     secrets: inherit
 
   windows:
     name: Build Windows
+    needs: privacy
     uses: ./.github/workflows/build-windows.yml
 
   draft:
     name: Draft release
-    needs: [build, android, windows]
+    needs: [privacy, build, android, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -50,6 +84,11 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      - name: Privacy scan of the builds
+        env:
+          PRIVACY_GUARD_EXTRA: ${{ secrets.PRIVACY_GUARD_EXTRA }}
+        run: python3 tools/scan_artifacts.py dist/VelikiyMoguchiy-macOS-arm64.zip dist/VelikiyMoguchiy-iOS-unsigned.ipa dist/VelikiyMoguchiy-Android*.apk dist/VelikiyMoguchiy-Windows-x64.zip
 
       - name: Checksums and release notes
         run: |

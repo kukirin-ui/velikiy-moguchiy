@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Guard tests
-        run: python3 -m pip install -q pytest && python3 -m pytest -q -p no:cacheprovider tools/test_privacy_guard.py
+        run: python3 -m pip install -q pytest && python3 -m pytest -q -p no:cacheprovider tools/test_privacy_guard.py tools/test_scan_artifacts.py
       - name: Files
         env:
           PRIVACY_GUARD_EXTRA: ${{ secrets.PRIVACY_GUARD_EXTRA }}
