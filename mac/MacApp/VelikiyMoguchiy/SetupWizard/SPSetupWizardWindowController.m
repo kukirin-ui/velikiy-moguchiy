@@ -1832,7 +1832,8 @@ static NSString *SPCondensedProviderError(NSString *raw) {
       @"Идентификатор приложения (com.apple.mail) или его имя; подойдёт и "
       @"начало идентификатора. Если приложения нет в списке: мессенджеры, "
       @"терминалы, редакторы кода и ИИ-чаты — как сказал, остальные — режим "
-      @"выше. Перевод и вопрос всегда идут через Qwen Omni."];
+      @"выше. Перевод, вопрос и правка голосом всегда отправляют звук в "
+      @"DashScope (Qwen Omni), даже если диктовка локальная."];
   qwenAppModesHint.font = [NSFont systemFontOfSize:11];
   qwenAppModesHint.textColor = [NSColor secondaryLabelColor];
   CGFloat qwenHintW = fieldW;

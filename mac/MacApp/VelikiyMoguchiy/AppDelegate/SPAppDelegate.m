@@ -980,7 +980,7 @@ static BOOL SPLabFlag(const char *name) {
         selectedText = anchor.selectedText;
         requested = [SPTextEditPolicy effectivePurposeForRequested:requested selectedText:selectedText];
         if (requested == SPSessionPurposeEdit && !sp_core_edit_supported()) {
-            NSLog(@"[VelikiyMoguchiy] Edit needs the Qwen Omni recognizer — behaving like Ask");
+            NSLog(@"[VelikiyMoguchiy] Edit needs a DashScope key (it runs on Qwen Omni) — behaving like Ask");
             requested = SPSessionPurposeAsk;
         }
         if (requested == SPSessionPurposeEdit) {
