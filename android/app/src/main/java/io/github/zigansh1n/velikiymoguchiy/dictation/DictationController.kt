@@ -41,7 +41,7 @@ class DictationController(
     private val _state = MutableStateFlow<DictationState>(DictationState.Idle)
     val state: StateFlow<DictationState> = _state
 
-    private var recorder: AudioRecorder? = null
+    private var recorder: AudioInput? = null
     private var session: DashScopeSession? = null
     private var connectJob: Job? = null
     private var limitJob: Job? = null
@@ -88,13 +88,16 @@ class DictationController(
 
     private fun startDashScope(key: String, language: DictationLanguage) {
         val endpoint = DashScopeProtocol.endpoint(key, settings.model, settings.region)
-        val session = DashScopeSession(endpoint, settings.model, language, socketFactory, io) { preview ->
+        val sockets = DictationOverrides.socketFactory ?: socketFactory
+        val session = DashScopeSession(endpoint, settings.model, language, sockets, io) { preview ->
             _state.update { if (it is DictationState.Listening) it.copy(preview = preview) else it }
         }
         this.session = session
-        val recorder = AudioRecorder(session::offerAudio) { level ->
+        val onLevel = { level: Float ->
             _state.update { if (it is DictationState.Listening) it.copy(level = level) else it }
         }
+        val recorder = DictationOverrides.audioInput?.invoke(session::offerAudio, onLevel)
+            ?: AudioRecorder(session::offerAudio, onLevel)
         this.recorder = recorder
         // Recording starts at once; chunks wait in the session until the socket is ready.
         @Suppress("MissingPermission")

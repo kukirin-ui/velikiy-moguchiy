@@ -6,18 +6,26 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import androidx.annotation.RequiresPermission
 
+/** Delivers 100 ms PCM16 chunks until [stop], which hands over the last chunk before it returns. */
+interface AudioInput {
+    fun start()
+    fun stop()
+}
+
+typealias AudioInputFactory = (onChunk: (ByteArray) -> Unit, onLevel: (Float) -> Unit) -> AudioInput
+
 /** Records 16 kHz mono PCM16 in 100 ms chunks on its own thread. */
 class AudioRecorder(
     private val onChunk: (ByteArray) -> Unit,
     /** 0..1, about ten times a second. */
     private val onLevel: (Float) -> Unit,
-) {
+) : AudioInput {
     private var record: AudioRecord? = null
     private var thread: Thread? = null
     @Volatile private var running = false
 
     @RequiresPermission(Manifest.permission.RECORD_AUDIO)
-    fun start() {
+    override fun start() {
         val minimum = AudioRecord.getMinBufferSize(Pcm16.SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (minimum <= 0) throw DictationException.Microphone("телефон не записывает 16 кГц.")
         val record = try {
@@ -65,7 +73,7 @@ class AudioRecorder(
         }
     }
 
-    fun stop() {
+    override fun stop() {
         running = false
         val record = record ?: return
         this.record = null
