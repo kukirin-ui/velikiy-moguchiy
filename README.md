@@ -33,24 +33,27 @@
 <p align="center"><img src="design/readme/guests.jpg" width="760" alt="Н. К. Рерих. «Заморские гости» (1901)"><br>
 <sub><i>Н. К. Рерих. «Заморские гости» (1901). Общественное достояние, Wikimedia Commons.</i></sub></p>
 
-<img src="design/readme/initial-o.svg" align="left" width="72" alt="О">дин репозиторий, четыре части. У каждой своя папка и свой README с установкой и сборкой.
+<img src="design/readme/initial-o.svg" align="left" width="72" alt="О">дин репозиторий, шесть частей. У каждой своя папка и свой README с установкой и сборкой.
 <br clear="left">
 
 | Продукт | Папка | Что делает | Состояние |
 |---|---|---|---|
 | **Диктовка для macOS** | [`mac/`](mac/) | Приложение в строке меню: нажали клавишу, говорите, отпустили — распознанный и при желании исправленный LLM текст вставляется в любое приложение. | работает; сборка без подписи Apple |
+| **Диктовка для Windows** | [`windows/`](windows/) | Программа в трее Windows 10 и 11: держите клавишу, говорите, отпустите — текст вставляется в любую программу; то же ядро, что на Mac. | ранняя версия; без подписи, без истории и чтения по губам |
 | **Клавиатура для iPhone** | [`ios/`](ios/) | Клавиатуры RU и EN, повторяющие системную клавиатуру iOS 26, с кнопкой нейродиктовки (Qwen Omni). | работает; IPA без подписи |
+| **Клавиатура для Android** | [`android/`](android/) | Клавиатура RU/EN с подсказками, автоисправлением как на iPhone и диктовкой через Qwen. | первая версия: собирается и проходит тесты в CI, на телефонах ещё не проверялась |
 | **Чтение по губам** | [`lipread/`](lipread/) | Беззвучная диктовка по видео с камеры на модели MultiVSR, дообученной на русском; на Mac — экспериментальный режим «губы». | **эксперимент**, ошибка ~70% слов |
-| **Обучение силами сообщества** | [`federated/`](federated/) | «Помочь обучить»: участник обучает адаптер у себя на публичных роликах, на сервер уходят только изменения весов, и только с отдельного согласия. | готово к развёртыванию: сервер приёма на Cloudflare Workers ([шаги](docs/AUTOMATION.md)) |
+| **Обучение силами сообщества** | [`federated/`](federated/) | «Помочь обучить» (Mac): участник обучает адаптер у себя на публичных роликах, на сервер уходят только изменения весов, и только с отдельного согласия. | сервер приёма работает на Cloudflare Workers, объединение — раз в сутки в GitHub Actions |
 
 <p align="center"><img src="design/readme/divider-krin.svg" width="520" alt=""></p>
 
 <h2 align="center"><img src="design/readme/h-install.svg" width="680" alt="Установка"></h2>
 
 **Готовые сборки** — на странице [Releases](https://github.com/zigansh1n/velikiy-moguchiy/releases):
-`VelikiyMoguchiy-macOS-arm64.zip` (Mac на Apple Silicon, macOS 14+) и `VelikiyMoguchiy-iOS-unsigned.ipa`
-(iPhone с iOS 26). Подписи Apple у них пока нет: как открыть приложение на Mac и как поставить IPA на iPhone,
-написано в [`mac/README.md`](mac/README.md) и [`ios/README.md`](ios/README.md).
+`VelikiyMoguchiy-macOS-arm64.zip` (Mac на Apple Silicon, macOS 14+), `VelikiyMoguchiy-Windows-x64.zip` (Windows 10
+и 11), `VelikiyMoguchiy-iOS-unsigned.ipa` (iPhone с iOS 26) и APK для Android 6+. Подписей Apple и Windows у них
+пока нет: как открыть и поставить каждую, написано в [`mac/README.md`](mac/README.md),
+[`windows/README.md`](windows/README.md), [`ios/README.md`](ios/README.md) и [`android/README.md`](android/README.md).
 
 **Из исходников:**
 
@@ -62,7 +65,9 @@ cd velikiy-moguchiy
 | Продукт | Коротко | Подробно |
 |---|---|---|
 | macOS | `cd mac && make build && make install-app` (Xcode, Rust, cmake, XcodeGen) | [`mac/README.md`](mac/README.md) |
+| Windows | `cd windows && cargo build --release` (Rust MSVC, Visual Studio Build Tools с C++ и CMake) | [`windows/README.md`](windows/README.md) |
 | iPhone | `cd ios && cp Config/Secrets.xcconfig.example Config/Secrets.xcconfig && xcodegen generate` (Xcode 26) | [`ios/README.md`](ios/README.md) |
+| Android | `cd android && ./gradlew assembleDebug` (JDK 17+, Android SDK) | [`android/README.md`](android/README.md) |
 | Чтение по губам | `cd lipread && ./setup.sh && ./download_weights.sh` (Apple Silicon, uv, ffmpeg) | [`lipread/README.md`](lipread/README.md) |
 | Общее обучение | `cd federated && .venv/bin/python -m pytest` | [`federated/README.md`](federated/README.md) |
 
@@ -76,11 +81,13 @@ cd velikiy-moguchiy
 | Путь | Что там |
 |---|---|
 | `mac/` | приложение macOS: оболочка на Objective-C, ядро на Rust (`velikiy-moguchiy-core`, `-asr`, `-cli`), Swift-пакеты |
+| `windows/` | программа для Windows на Rust (Win32), то же ядро `velikiy-moguchiy-core`, что у Mac |
 | `ios/` | приложение и клавиатуры iOS (XcodeGen `project.yml`), тесты, проверка совпадения с клавиатурой Apple |
+| `android/` | клавиатура Android на Kotlin (Gradle), тесты |
 | `lipread/` | чтение по губам: запись, оценка, дообучение LoRA, сервис для режима «губы» |
-| `federated/` | протокол, сервер, клиент и симуляция федеративного обучения |
+| `federated/` | протокол, сервер приёма «Помочь обучить» на Cloudflare Workers (`worker/`), агрегатор для GitHub Actions, клиент, симуляция |
 | `tools/` | служебные инструменты: охранник памяти, статус конвейера, проверки приватности и текстов |
-| `.github/` | `tests.yml` — тесты на каждый PR; `build-apple.yml` — сборка Mac и iOS (по метке `build`, тегу или вручную); `release.yml` — черновик релиза по тегу `v*`; `privacy.yml` и `text-review.yml` — проверка приватности и текстов в каждом PR; `stores.yml` — Homebrew и AltStore после релиза; `labels.yml` — ярлыки; `contributors.yml` — таблица участников; шаблоны issue и PR |
+| `.github/` | `tests.yml` — тесты на каждый PR; `build-apple.yml`, `build-windows.yml`, `build-android.yml` — сборки (по метке `build`, тегу или вручную); `federated-worker.yml` и `federated-aggregate.yml` — сервер приёма и ежедневное объединение; `release.yml` — черновик релиза по тегу `v*`; `privacy.yml` и `text-review.yml` — проверка приватности и текстов в каждом PR; `stores.yml` — Homebrew и AltStore после релиза; `labels.yml` — ярлыки; `contributors.yml` — таблица участников; шаблоны issue и PR |
 
 <p align="center"><img src="design/readme/divider-band.svg" width="520" alt=""></p>
 
@@ -91,10 +98,10 @@ cd velikiy-moguchiy
 - Учётной записи нет, своей аналитики приложения не отправляют.
 - Речь уходит только провайдеру распознавания, **ключ которого вы указали сами**; с локальными моделями — никуда.
 - История, записи и видео хранятся только на вашем устройстве.
-- **Камера и участие в общем обучении — два отдельных согласия, оба по умолчанию выключены.** Изображение лица —
+- **Камера и участие в обучении — отдельные согласия, все по умолчанию выключены.** Изображение лица —
   биометрические данные (152-ФЗ).
-- Сервера общего обучения пока нет. Когда он появится, при участии в обучении будут отправляться только
-  **изменения весов адаптера**, никогда не видео, звук или текст.
+- «Помочь обучить» отправляет только **изменения весов адаптера**, числа о вкладе и ваш логин GitHub, и только после
+  вашего «Отправить»; видео, звук и текст — никогда. Обучение на ваших записях пока ничего не отправляет.
 
 <p align="center"><img src="design/readme/divider-krin.svg" width="520" alt=""></p>
 
@@ -119,9 +126,8 @@ MultiVSR; она опубликована по решению автора пр�
 
 1. **Чтение по губам:** больше данных и обучение, пока ошибка заметно падает; затем «звук + губы» в шуме.
 2. **Своя модель губ без весов MultiVSR** — чтобы веса можно было распространять свободно.
-3. **Общее обучение:** приём обновлений на Cloudflare Worker, объединение в GitHub Actions, модель на Hugging Face;
-   в приложении — только с отдельного согласия. Сейчас в работе.
-4. **Приложение для Windows и клавиатура для Android** — в работе.
+3. **Общее обучение:** первые раунды «Помочь обучить»; затем обучение на личных записях с отдельного согласия.
+4. **Windows и Android:** чтение по губам на Windows, проверка клавиатуры Android на настоящих телефонах.
 5. **Подписанная сборка для macOS** (нотаризация, автообновление) и **TestFlight / App Store** для клавиатуры.
 
 Состояние чтения по губам и замеры — в [`lipread/README.md`](lipread/README.md).
