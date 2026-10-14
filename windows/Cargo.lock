@@ -2733,6 +2733,7 @@ dependencies = [
 name = "velikiy-moguchiy-windows"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "embed-resource",
  "log",
  "png",

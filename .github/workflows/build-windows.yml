@@ -64,6 +64,10 @@ jobs:
           cp README.md "$DIST/README.md"
           cp ../LICENSE "$DIST/LICENSE.txt"
           cp ../THIRD_PARTY.md "$DIST/THIRD_PARTY.md"
+          python tools/third_party_notices.py "$DIST/ThirdPartyNotices.txt"
+          if grep -aqi 'espeak' "$DIST/VelikiyMoguchiy.exe"; then
+            echo "::error::GPL code (espeak-ng) in the release executable"; exit 1
+          fi
           cd "$RUNNER_TEMP"
           7z a -tzip "$GITHUB_WORKSPACE/VelikiyMoguchiy-Windows-x64.zip" VelikiyMoguchiy >/dev/null
           ls -l "$GITHUB_WORKSPACE/VelikiyMoguchiy-Windows-x64.zip"

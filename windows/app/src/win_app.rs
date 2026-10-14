@@ -22,6 +22,7 @@ use velikiy_moguchiy_windows::audio::{Framer, Resampler, FRAME_SAMPLES};
 use velikiy_moguchiy_windows::controller::{Controller, Host, OverlayMode, OverlayView, Target};
 use velikiy_moguchiy_windows::core_bridge::{self, BridgeEvent, DownloadEvent};
 use velikiy_moguchiy_windows::hotkey::{Gesture, HotkeyFilter, TriggerKey, TriggerMode};
+use velikiy_moguchiy_windows::keys::{self, Vault};
 use velikiy_moguchiy_windows::logfile;
 use velikiy_moguchiy_windows::settings::{
     self, Settings, LANGUAGES, PROVIDER_LOCAL, PROVIDER_QWEN, QWEN_MODELS,
@@ -44,8 +45,12 @@ const F_MODEL: usize = 2;
 const F_LANGUAGE: usize = 3;
 const F_TRIGGER: usize = 4;
 const F_MODE: usize = 5;
-const F_LOCAL_STATUS: usize = 6;
+const F_STATUS: usize = 6;
+/// Only in builds with local recognition.
 const F_DOWNLOAD: usize = 7;
+
+/// Local recognition is compiled in (the `sherpa-onnx` feature).
+const LOCAL: bool = cfg!(feature = "sherpa-onnx");
 
 enum AppEvent {
     Gesture(Gesture),
@@ -277,9 +282,14 @@ impl Host for WinHost {
     }
 
     fn setup_problem(&mut self) -> Option<String> {
-        let s = Settings::load();
+        let s = Settings::load(&Dpapi);
         if let Some(problem) = s.problem() {
             return Some(problem.to_string());
+        }
+        if s.provider == PROVIDER_LOCAL && !LOCAL {
+            return Some(
+                "В этой сборке нет локального распознавания: выберите Qwen в настройках.".into(),
+            );
         }
         if s.provider == PROVIDER_LOCAL && core_bridge::model_status(&local_model()) != 2 {
             return Some(
@@ -291,6 +301,19 @@ impl Host for WinHost {
 
     fn config_flag(&mut self, key: &str) -> bool {
         core_bridge::config_flag(key)
+    }
+}
+
+/// Keys sealed for the current Windows user.
+struct Dpapi;
+
+impl Vault for Dpapi {
+    fn seal(&self, plain: &[u8]) -> Result<Vec<u8>, String> {
+        velikiy_moguchiy_win32::secret::protect(plain)
+    }
+
+    fn open(&self, sealed: &[u8]) -> Result<Vec<u8>, String> {
+        velikiy_moguchiy_win32::secret::unprotect(sealed)
     }
 }
 
@@ -437,13 +460,14 @@ impl App {
                 return;
             }
         }
-        let s = Settings::load();
+        let s = Settings::load(&Dpapi);
 
-        let mut providers = vec![PROVIDER_QWEN.to_string(), PROVIDER_LOCAL.to_string()];
-        let mut provider_titles = vec![
-            "Qwen в облаке (ваш ключ DashScope)".to_string(),
-            "Локально, без интернета (sherpa-onnx, процессор)".to_string(),
-        ];
+        let mut providers = vec![PROVIDER_QWEN.to_string()];
+        let mut provider_titles = vec!["Qwen в облаке (ваш ключ DashScope)".to_string()];
+        if LOCAL {
+            providers.push(PROVIDER_LOCAL.to_string());
+            provider_titles.push("Локально, без интернета (sherpa-onnx, процессор)".to_string());
+        }
         if !providers.contains(&s.provider) {
             providers.push(s.provider.clone());
             provider_titles.push(format!("{} (задан в config.yaml)", s.provider));
@@ -468,7 +492,7 @@ impl App {
         let keys = TriggerKey::choices();
         let modes = TriggerMode::choices();
         let index = |list: &[String], v: &str| list.iter().position(|x| x == v).unwrap_or(0);
-        let fields = vec![
+        let mut fields = vec![
             Field::Choice {
                 label: "Распознавание речи".into(),
                 options: provider_titles,
@@ -499,18 +523,21 @@ impl App {
                 options: modes.iter().map(|m| m.title().to_string()).collect(),
                 selected: modes.iter().position(|m| *m == s.trigger_mode).unwrap_or(0),
             },
-            Field::Note(if self.downloading {
-                "Скачивание…".into()
-            } else {
-                local_status_text()
+            Field::Note(match (LOCAL, self.downloading) {
+                (false, _) => String::new(),
+                (true, true) => "Скачивание…".into(),
+                (true, false) => local_status_text(),
             }),
-            Field::Button("Скачать локальную модель".into()),
-            Field::Note(
-                "Держите клавишу и говорите — текст вставится туда, где мигает курсор. \
-                 Остальные настройки — в config.yaml (общий с Mac)."
-                    .into(),
-            ),
         ];
+        if LOCAL {
+            fields.push(Field::Button("Скачать локальную модель".into()));
+        }
+        fields.push(Field::Note(
+            "Держите клавишу и говорите — текст вставится туда, где мигает курсор. \
+             Ключ хранится зашифрованным для вашей учётной записи Windows. \
+             Остальные настройки — в config.yaml (общий с Mac)."
+                .into(),
+        ));
         let queue = self.host.queue.clone();
         match Form::open(
             &format!("{APP_NAME} — настройки"),
@@ -561,7 +588,7 @@ impl App {
                         .copied()
                         .unwrap_or(w.before.trigger_mode),
                 };
-                match after.save(&w.before) {
+                match after.save(&w.before, &Dpapi) {
                     Ok(()) => {
                         core_bridge::reload_config();
                         self.host
@@ -576,17 +603,17 @@ impl App {
                     Err(e) => {
                         log::error!("saving settings: {e}");
                         w.form
-                            .set_note(F_LOCAL_STATUS, &format!("Не удалось сохранить: {e}"));
+                            .set_note(F_STATUS, &format!("Не удалось сохранить: {e}"));
                     }
                 }
             }
-            FormEvent::Button(F_DOWNLOAD) if !self.downloading => {
+            FormEvent::Button(F_DOWNLOAD) if LOCAL && !self.downloading => {
                 if core_bridge::download_model(&local_model()) {
                     self.downloading = true;
-                    w.form.set_note(F_LOCAL_STATUS, "Скачивание…");
+                    w.form.set_note(F_STATUS, "Скачивание…");
                 } else {
                     w.form.set_note(
-                        F_LOCAL_STATUS,
+                        F_STATUS,
                         "Не удалось начать скачивание — подробности в журнале.",
                     );
                 }
@@ -623,7 +650,7 @@ impl App {
             }
         };
         if let Some(w) = &self.settings_window {
-            w.form.set_note(F_LOCAL_STATUS, &note);
+            w.form.set_note(F_STATUS, &note);
         }
     }
 }
@@ -643,6 +670,18 @@ pub fn run() {
             "Программа уже запущена — её значок в трее, у часов.",
         );
         return;
+    }
+
+    // The keys must be in this process's environment before the core first
+    // reads the config.
+    if let Err(e) = config::ensure_defaults() {
+        log::warn!("default config: {e}");
+    }
+    if let Err(e) = settings::apply_windows_defaults() {
+        log::warn!("Windows defaults: {e}");
+    }
+    if let Err(e) = keys::secure(&Dpapi) {
+        log::error!("encrypting the DashScope keys: {e}");
     }
 
     let shell = match Shell::create() {
@@ -670,7 +709,7 @@ pub fn run() {
         return;
     }
 
-    let settings = Settings::load();
+    let settings = Settings::load(&Dpapi);
     let filter = Arc::new(Mutex::new(HotkeyFilter::new(
         settings.trigger_key,
         settings.trigger_mode,

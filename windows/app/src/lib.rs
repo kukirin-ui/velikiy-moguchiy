@@ -8,5 +8,6 @@ pub mod audio;
 pub mod controller;
 pub mod core_bridge;
 pub mod hotkey;
+pub mod keys;
 pub mod logfile;
 pub mod settings;

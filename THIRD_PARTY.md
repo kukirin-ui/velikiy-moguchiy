@@ -65,6 +65,24 @@ CDLA-Permissive-2.0 (данные корневых сертификатов `web
 | `sherpa-onnx` / `sherpa-onnx-sys` и их статические библиотеки: sherpa-onnx, kaldi-native-fbank, kaldi-decoder, OpenFst, simple-sentencepiece, ONNX Runtime, KISS FFT | Apache-2.0; ONNX Runtime — MIT; KISS FFT — BSD-3-Clause | в релизной сборке: вариант **без синтеза речи** (`mac/scripts/sherpa-onnx-libs.sh`, закреплён по SHA-256), потому что обычный тянет espeak-ng (GPL-3.0); тексты лицензий — в `ThirdPartyNotices.txt` |
 | `libsqlite3-sys` | MIT | линкуется системный SQLite, свой не встраивается |
 
+## 4а. Windows (`windows/`)
+
+`windows/Cargo.lock`: то же Rust-ядро плюс крейты для Windows. В `VelikiyMoguchiy.exe` из релиза
+(x86_64-pc-windows-msvc, без функции `sherpa-onnx`) линкуются 178 крейтов, все под разрешительными лицензиями:
+MIT, Apache-2.0, их сочетания, ISC, BSD, Unicode-3.0, Zlib, BSL-1.0, CDLA-Permissive-2.0. Их список и тексты
+лицензий (из самих крейтов, плюс `COPYING` встроенной libopus) лежат в zip рядом с программой:
+`ThirdPartyNotices.txt`, его пишет `windows/tools/third_party_notices.py` при сборке релиза.
+
+| Что отметить | Лицензия | Статус |
+|---|---|---|
+| `windows` 0.62 и `windows-*` (Microsoft, привязки Win32) | MIT OR Apache-2.0 | линкуются, текст в `ThirdPartyNotices.txt` |
+| `cpal` 0.18 (микрофон через WASAPI), `dasp_sample` | Apache-2.0; MIT OR Apache-2.0 | линкуются, текст в `ThirdPartyNotices.txt` |
+| `audiopus_sys` собирает и статически линкует **libopus** | BSD-подобная (Xiph.Org и др.) | текст `opus/COPYING` — в `ThirdPartyNotices.txt` |
+| `ring` (код BoringSSL/OpenSSL) | Apache-2.0 AND ISC + уведомления BoringSSL | линкуется, файлы лицензий — в `ThirdPartyNotices.txt` |
+| `embed-resource`, `png` | MIT; MIT OR Apache-2.0 | только сборка (ресурсы и иконки), в программу не линкуются |
+| Иконки программы | MIT (проект) | делаются при сборке из иконки Mac-приложения (`mac/MacApp/.../AppIcon.appiconset`) |
+| `sherpa-onnx` / `sherpa-onnx-sys`: готовые библиотеки с GitHub k2-fsa (sherpa-onnx — Apache-2.0, onnxruntime — MIT, kaldi-native-fbank — Apache-2.0, **espeak-ng — GPL-3.0**, piper-phonemize — MIT) | разные, включая **GPL-3.0** | **в релиз не входит**: только при сборке с функцией `sherpa-onnx`. Общий C API sherpa-onnx тянет в программу и синтез речи с espeak-ng, поэтому такая сборка не может распространяться только под MIT. CI проверяет, что в релизном exe нет espeak-ng |
+
 ## 5. Python
 
 **lipread** (`lipread/pyproject.toml`, `uv.lock`; лицензии по метаданным установленных пакетов, в репозитории не записаны):

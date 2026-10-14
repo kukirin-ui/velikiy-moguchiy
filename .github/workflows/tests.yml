@@ -95,10 +95,12 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets
       - name: Test
-        # The core is built with the local sherpa-onnx engine, as in the release.
         run: cargo test --workspace
       - name: Build
         run: cargo build --workspace
+      - name: Build with local recognition
+        # Not released (sherpa-onnx brings GPL-3.0 espeak-ng), but kept building.
+        run: cargo build --workspace --features velikiy-moguchiy-windows/sherpa-onnx
 
   federated:
     name: Federated (pytest)
