@@ -1,0 +1,111 @@
+name: Android emulator tests
+
+# The keyboard in android/ on a real Android system: an x86_64 emulator (API 34, Google APIs) on
+# a Linux runner with KVM. android/scripts/emulator-tests.sh installs the debug APK, makes the
+# keyboard the current input method with adb and runs the instrumented tests in
+# android/app/src/androidTest: typing through touches on the keyboard's keys, a dictation round
+# against a scripted DashScope (no key, no network) and the emulator's microphone.
+#
+#   - pull requests that touch android/ (or this file);
+#   - nightly, to catch emulator image and runner changes;
+#   - manually: Actions > Android emulator tests > Run workflow.
+#
+# No secrets are used, so pull requests from forks run it too.
+
+on:
+  pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/smoke-android.yml"
+  schedule:
+    - cron: "40 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  API_LEVEL: 34
+  TARGET: google_apis
+  ARCH: x86_64
+  PROFILE: pixel_6
+  # The same options create the cached snapshot and run the tests; audio stays on for the microphone test.
+  EMULATOR_OPTIONS: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none -camera-front none
+
+jobs:
+  emulator:
+    name: Android emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: gradle/actions/wrapper-validation@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the app and the tests
+        run: ./gradlew --console=plain assembleDebug assembleDebugAndroidTest
+
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ env.API_LEVEL }}-${{ env.TARGET }}-${{ env.ARCH }}-${{ env.PROFILE }}-v1
+
+      - name: Create the AVD and a snapshot for the cache
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: ${{ env.TARGET }}
+          arch: ${{ env.ARCH }}
+          profile: ${{ env.PROFILE }}
+          force-avd-creation: false
+          emulator-options: ${{ env.EMULATOR_OPTIONS }}
+          disable-animations: false
+          script: echo "AVD snapshot generated for the cache."
+
+      - name: Emulator tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.API_LEVEL }}
+          target: ${{ env.TARGET }}
+          arch: ${{ env.ARCH }}
+          profile: ${{ env.PROFILE }}
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save ${{ env.EMULATOR_OPTIONS }}
+          disable-animations: true
+          working-directory: android
+          script: ./scripts/emulator-tests.sh
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-emulator-results
+          path: |
+            android/build/emulator/
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+          if-no-files-found: ignore
