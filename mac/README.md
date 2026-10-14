@@ -23,10 +23,15 @@
 
 3. При первом запуске дайте доступ к **микрофону**, **универсальному доступу** и **мониторингу ввода**
    (таблица ниже), затем в настройках укажите ключ провайдера распознавания (для русского — DashScope, модели Qwen).
+   Нет ключа — приложение предложит распознавать речь прямо на Mac: русская модель Vosk (около 30 МБ, sherpa-onnx)
+   скачается один раз с проверкой SHA-256, звук никуда не уходит. Ключ можно указать позже; приложение никогда не
+   меняет выбранное распознавание само, если ключ задан.
 
 У ad-hoc подписи нет постоянной «личности», поэтому после **каждого обновления** macOS может снова спросить
 разрешения или молча считать их выданными старой версии: снимите и заново поставьте галочки в
-«Конфиденциальность и безопасность». Автообновления нет, пока у проекта нет Developer ID.
+«Конфиденциальность и безопасность». Автообновления нет, пока у проекта нет Developer ID: раз в день приложение
+проверяет [Releases](https://github.com/zigansh1n/velikiy-moguchiy/releases) и, если вышла новая версия, показывает
+в меню «Доступна новая версия …» со ссылкой. Скачивает и ставит её пользователь.
 
 ## Сборка из исходников
 
@@ -36,14 +41,18 @@
 ```bash
 git clone https://github.com/zigansh1n/velikiy-moguchiy.git
 cd velikiy-moguchiy/mac
-cp MacApp/Config/Secrets.xcconfig.example MacApp/Config/Secrets.xcconfig   # по желанию: свой bundle id
+cp MacApp/Config/Secrets.xcconfig.example MacApp/Config/Secrets.xcconfig   # по желанию: свой bundle id для форка
 bash scripts/setup-codesign-identity.sh   # по желанию, один раз: разрешения не слетают между сборками
 make build          # XcodeGen + ядро на Rust + приложение + встроенный CLI
 make install-app    # копирует VelikiyMoguchiy.app в /Applications
 ```
 
 Только ядро и его тесты: `cargo test --workspace` в этой папке. CI собирает приложение так же
-(`.github/workflows/build-apple.yml` в корне репозитория).
+(`.github/workflows/build-apple.yml` в корне репозитория). Логика приложения (без интерфейса):
+`xcodebuild test -project MacApp/VelikiyMoguchiy.xcodeproj -scheme VelikiyMoguchiyLogicTests`.
+
+Bundle id сборок — `io.github.zigansh1n.velikiy-moguchiy` (`MacApp/Config/Base.xcconfig`); к нему macOS привязывает
+разрешения и настройки. Форку лучше задать свой в `MacApp/Config/Secrets.xcconfig` (файл не попадает в git).
 
 ## Разрешения
 
@@ -101,6 +110,32 @@ make install-app    # копирует VelikiyMoguchiy.app в /Applications
 Большую часть этого можно править в окне настроек (из меню в строке меню). Если файла промпта нет или он пустой,
 используется встроенный текст из `velikiy-moguchiy-core`; существующий `user_prompt.txt` приложение не перезаписывает.
 
+## Режим «губы» (эксперимент)
+
+Включается в `config.yaml`: `experimental.lips: true` и клавиша `hotkey.lips_key`. При первом нажатии клавиши
+приложение объясняет, что скачает, и после согласия ставит всё само, с прогрессом и кнопкой «Отменить» (загрузка
+продолжается с того же места):
+
+- базовую модель MultiVSR у её авторов (Оксфорд, около 4,5 ГБ; у неё нет лицензии, поэтому в проекте её нет);
+- дообученную модель губ, самую новую из [Hugging Face](https://huggingface.co/z1gansh1n/velikiy-moguchiy-lips) и
+  выпусков `lips-*` [velikiy-moguchiy-models](https://github.com/zigansh1n/velikiy-moguchiy-models/releases): сначала с
+  Hugging Face, если он недоступен — с GitHub (хэши по `SHA256SUMS.txt`);
+- [uv](https://github.com/astral-sh/uv), Python 3.13, библиотеки из `lipread/uv.lock`, код MultiVSR на закреплённом
+  коммите и ffmpeg (пакет `imageio-ffmpeg`).
+
+Каждый файл проверяется по SHA-256. Всё лежит в `~/.velikiy-moguchiy/`: модели — в `models/lips/`, окружение
+сервиса — в `lips/` (журнал установки — `lips/setup.log`). Код сервиса берётся из самого приложения, папка
+разработки не нужна. Раз в день приложение проверяет, нет ли выпуска `lips-*` новее, и предлагает обновить модель
+из меню. Разработчик может запустить сервис из своей папки `lipread/`: `lips.service_dir: ~/путь/к/lipread`.
+
+## Сообщить о проблеме
+
+Пункт меню «Сообщить о проблеме…» собирает версию приложения, версию macOS и последние строки лога этого запуска,
+скрывает ключи, токены, почту, тексты диктовок и имя пользователя в путях и показывает всё это: текст можно
+поправить. Ничего не отправляется само: «Открыть на GitHub» открывает в браузере заполненную форму
+[«Сообщить о проблеме»](https://github.com/zigansh1n/velikiy-moguchiy/issues/new?template=problem.yml), её
+отправляете вы.
+
 ## Командная строка и локальные модели
 
 Внутри приложения лежит CLI `velikiy-moguchiy` (`Contents/MacOS/velikiy-moguchiy-cli`; `make build` ставит и его):
@@ -124,8 +159,10 @@ velikiy-moguchiy model remove mlx/Qwen3-ASR-0.6B-4bit    # удалить фай
 
 Локальные провайдеры включаются функциями Cargo в `velikiy-moguchiy-core/Cargo.toml`: `mlx`, `apple-speech`,
 `sherpa-onnx` (по умолчанию все три). `make build` и релизная сборка собирают ядро с `--no-default-features --features
-apple-speech` (`Makefile`, `MacApp/project.yml`), поэтому в ней только облачные провайдеры и Apple Speech. Функция
-`wetype-offline` никогда не входит ни в сборку по умолчанию, ни в релиз.
+apple-speech,sherpa-onnx` (`Makefile`, `MacApp/project.yml`): облачные провайдеры, Apple Speech и sherpa-onnx (MLX
+пока не собирается на Xcode 26.3). sherpa-onnx линкуется в варианте без синтеза речи (`scripts/sherpa-onnx-libs.sh`):
+обычные библиотеки тянут в приложение espeak-ng под GPL-3.0. Функция `wetype-offline` никогда не входит ни в сборку
+по умолчанию, ни в релиз.
 
 ## Лицензия
 

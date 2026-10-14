@@ -50,7 +50,7 @@
 ## 4. Rust (macOS-приложение и CLI)
 
 `mac/Cargo.lock`: крейты с crates.io, у всех есть поле `license`. В приложение и встроенный CLI
-(ядро с `--no-default-features --features apple-speech`, aarch64-apple-darwin) линкуются 180 крейтов, все под
+(ядро с `--no-default-features --features apple-speech,sherpa-onnx`, aarch64-apple-darwin) линкуются 182 крейта, все под
 разрешительными лицензиями: MIT, Apache-2.0, их сочетания, ISC, BSD, Unicode-3.0, Zlib, BSL-1.0,
 CDLA-Permissive-2.0 (данные корневых сертификатов `webpki-roots`). Их список и тексты лицензий (из самих крейтов,
 плюс `COPYING` встроенной libopus) лежат в приложении: `mac/MacApp/VelikiyMoguchiy/Licenses/ThirdPartyNotices.txt`,
@@ -62,7 +62,7 @@ CDLA-Permissive-2.0 (данные корневых сертификатов `web
 | `r-efi` | MIT OR Apache-2.0 OR LGPL-2.1-or-later | только для UEFI, в сборку не попадает |
 | `audiopus_sys` собирает и статически линкует **libopus** | BSD-подобная (Xiph.Org и др.) | текст `opus/COPYING` кладётся в приложение (`ThirdPartyNotices.txt`) |
 | `ring` (код BoringSSL/OpenSSL) | Apache-2.0 AND ISC + уведомления BoringSSL | файлы лицензий `ring` кладутся в приложение (`ThirdPartyNotices.txt`) |
-| `sherpa-onnx` / `sherpa-onnx-sys` (скачивают onnxruntime) | Apache-2.0 | только с выключенной в сборке функцией `sherpa-onnx` |
+| `sherpa-onnx` / `sherpa-onnx-sys` и их статические библиотеки: sherpa-onnx, kaldi-native-fbank, kaldi-decoder, OpenFst, simple-sentencepiece, ONNX Runtime, KISS FFT | Apache-2.0; ONNX Runtime — MIT; KISS FFT — BSD-3-Clause | в релизной сборке: вариант **без синтеза речи** (`mac/scripts/sherpa-onnx-libs.sh`, закреплён по SHA-256), потому что обычный тянет espeak-ng (GPL-3.0); тексты лицензий — в `ThirdPartyNotices.txt` |
 | `libsqlite3-sys` | MIT | линкуется системный SQLite, свой не встраивается |
 
 ## 5. Python
@@ -80,6 +80,10 @@ python_speech_features, pydub, onnx, onnxruntime, diffusers, accelerate, librosa
 **federated** (`federated/pyproject.toml`, без lock-файла): numpy (BSD-3-Clause и др.), safetensors (Apache-2.0),
 cryptography (Apache-2.0 OR BSD-3-Clause), pydantic (MIT), fastapi (MIT), uvicorn (BSD-3-Clause),
 python-multipart (Apache-2.0), httpx (BSD-3-Clause), pytest (MIT), torch (BSD-3-Clause, только симуляция).
+
+**Режим «губы» в приложении** ставит на машину пользователя (в `~/.velikiy-moguchiy/lips/`, в приложение не кладётся)
+[uv](https://github.com/astral-sh/uv) (MIT / Apache-2.0), Python и пакеты из `lipread/uv.lock`, код MultiVSR (см. §6)
+и `imageio-ffmpeg` (BSD-2-Clause; внутри — сборка FFmpeg под GPL, скачивается пользователем с PyPI).
 
 **Lipflow** (`mac/vendor/lipflow/uv.lock`, 116 пакетов, ставятся на машину пользователя его `setup.sh`, в приложение не
 кладутся): лицензии в lock-файле не записаны — **проверить**, в первую очередь на копилефт: pynput, pystray,
@@ -99,7 +103,7 @@ python-xlib, av (PyAV, несёт FFmpeg).
 | Что | Как используется | Что сказано в репозитории | Где | Статус |
 |---|---|---|---|---|
 | [MultiVSR](https://github.com/Sindhu-Hegde/multivsr): код | `lipread/setup.sh` клонирует у авторов на закреплённом коммите; `lipread/multivsr_compat.py` правит эту локальную копию на машине пользователя | «у репозитория MultiVSR нет файла LICENSE» | `lipread/README.md` | **лицензия не указана**; кода MultiVSR в репозитории нет: прежний патч с их кодом удалён, скрипт вносит те же правки локально (в нём только короткие строки-ориентиры) и сверяет результат по SHA-256 |
-| MultiVSR: веса `model.pth` | скачиваются у авторов | «лицензия не указана» | `lipread/download_weights.sh` | **лицензия не указана**, проектом не распространяются |
+| MultiVSR: веса `model.pth` | скачиваются у авторов (`download_weights.sh`; приложение в режиме «губы» — с согласия пользователя, по SHA-256) | «лицензия не указана» | `lipread/download_weights.sh`, `mac/MacApp/VelikiyMoguchiy/LipData/SPLipsRuntimePolicy.m` | **лицензия не указана**, проектом не распространяются |
 | Дообученная модель lips-0.1 (производная от MultiVSR) | режим «губы» и «Обучить на мне»; публикуется в выпуске `lips-0.1` и на Hugging Face | «опубликована по решению автора проекта до замены своей моделью; будет убрана, если авторы MultiVSR возразят» | `README.md`, `lipread/README.md` | **лицензия основы не указана**; разрешения авторов MultiVSR нет, запрета тоже нет |
 | VTP `feature_extractor.pth` | скачивается | «лицензия VTP-чекпойнта не найдена» | `lipread/README.md` | **лицензия не указана** |
 | Датасет MultiVSR (Hugging Face) | метаданные | «аннотации MIT; видео — авторы роликов» | `lipread/extdata/selection.py` | со слов |
@@ -115,7 +119,8 @@ python-xlib, av (PyAV, несёт FFmpeg).
 | Ролики YouTube, RuTube, VK | сбор клипов | «публиковать нельзя: авторские права и лица; можно только списки каналов и код сбора» | `tools/privacy_guard.py`, `.gitignore` | клипы не публикуются |
 | Whisper (токенизатор, `whisper-tiny`), Silero VAD, SpeechBrain voxlingua107, MediaPipe, S3FD, SyncNet, sd-vae-ft-mse, TAESD | вспомогательные модели на серверах | лицензии не указаны | `lipread/` (README, `newdata/`, `extdata/`, `synth/pod/`) | проверить |
 | Модели Lipflow (Auto-AVSR на LRS3, языковая модель) | скачиваются самим Lipflow на машину пользователя | «non-commercial research use» | `mac/vendor/lipflow/NOTICE`, `README.md` | **некоммерческие**: только для оценки, в приложение не встраиваются и нами не распространяются |
-| Qwen3 / Qwen3-ASR (MLX), модели sherpa-onnx | скачиваются по манифестам | лицензии не указаны | `mac/velikiy-moguchiy-core/src/manifests/` | проверить |
+| Vosk small streaming ru ([alphacep](https://huggingface.co/alphacep/vosk-model-small-streaming-ru), в формате sherpa-onnx) | локальное распознавание без ключа; скачивается по манифесту на машину пользователя | «apache-2.0» в карточке модели | `mac/velikiy-moguchiy-core/src/manifests/sherpa-onnx/ru-vosk-small.json` | со слов; нами не распространяется |
+| Qwen3 / Qwen3-ASR (MLX), другие модели sherpa-onnx | скачиваются по манифестам | лицензии не указаны | `mac/velikiy-moguchiy-core/src/manifests/` | проверить |
 | WeType `embed140m` (Tencent) | офлайн-распознавание, только за функцией `wetype-offline` | «восстановлено статическим анализом приложения WeType 3.5.2», веса раздаёт `model.koe.li` | `mac/velikiy-moguchiy-asr/src/wetype.rs` | **нет лицензии**; с v0.1 **не входит ни в сборку по умолчанию, ни в релиз**: функция выключена везде, манифест загрузки весов без неё не ставится; код оставлен только для локальных экспериментов разработчика |
 
 Облачные сервисы распознавания и LLM (DashScope / Qwen, Doubao / Volcengine, GLM, MiMo, OpenAI, Anthropic, APFEL)
