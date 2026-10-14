@@ -118,7 +118,7 @@ Bundle id сборок — `io.github.zigansh1n.velikiy-moguchiy` (`MacApp/Confi
 продолжается с того же места). После «Не сейчас» клавиша только напоминает, а установить можно в «Настройки →
 Данные для чтения по губам → Режим «губы»». Что ставится:
 
-- базовая модель MultiVSR у её авторов (Оксфорд, около 4,5 ГБ; у неё нет лицензии, поэтому в проекте её нет);
+- базовая модель MultiVSR у её авторов (Оксфорд, около 4,5 ГБ; её лицензия не указана, поэтому в проекте её нет);
 - дообученная модель губ, самая новая из [Hugging Face](https://huggingface.co/z1gansh1n/velikiy-moguchiy-lips) и
   выпусков `lips-*` [velikiy-moguchiy-models](https://github.com/zigansh1n/velikiy-moguchiy-models/releases): сначала с
   Hugging Face, если он недоступен — с GitHub;

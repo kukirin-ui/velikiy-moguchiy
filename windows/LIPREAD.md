@@ -26,8 +26,8 @@ Python-процесс из `lipread/` с загруженной моделью M
 - **ffmpeg** вызывается из `preprocess.py` по имени: его надо положить рядом (`ffmpeg.exe`) или искать в `PATH`.
 - **Окружение.** `setup.sh` и пути `.venv/bin/python` — для macOS. Для Windows нужен `setup.ps1` на `uv`
   (`uv venv`, `uv sync`; `.venv\Scripts\python.exe`), колёса `torch` с CUDA или CPU, `opencv-python`, `scipy`.
-  Код и веса MultiVSR, как и на Mac, скачиваются у авторов на компьютер пользователя (у MultiVSR нет лицензии,
-  мы их не распространяем).
+  Код и веса MultiVSR, как и на Mac, скачиваются у авторов на компьютер пользователя (лицензия MultiVSR не указана,
+  проект их не распространяет).
 
 ## Что сделать в приложении
 
