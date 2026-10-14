@@ -30,6 +30,12 @@ ASCII_RUN = re.compile(rb"[\x20-\x7e\t]{%d,}" % MIN_RUN)
 UTF16_RUN = re.compile(rb"(?:[\x20-\x7e]\x00){%d,}" % MIN_RUN)
 LEGACY_ID_FILE = re.compile(r"(?:^|/)[^/]+\.app/Contents/MacOS/[^/]+$")
 RUNNER_HOMES = g.HOME_OK | {"runneradmin", "vsts", "buildbot"}
+# font name tables carry the designers' copyright and contact lines, like a licence notice
+FONT = re.compile(r"\.(?:ttf|otf|ttc|woff2?)$", re.I)
+# addresses that third-party code compiles into every build, e.g. OpenSSL's assembler credits
+VENDOR_DOMAINS = re.compile(r"(?:^|\.)openssl\.org$", re.I)
+# R8-obfuscated names in classes.dex look like a short address with a mixed-case "domain"; real TLDs are lowercase
+TLD = re.compile(r"^[a-z]{2,}$")
 
 
 def runs(data: bytes):
@@ -50,11 +56,11 @@ def check_run(text: str, member: str, extra):
         name = m.group(1)
         if name.lower() not in RUNNER_HOMES and not name.startswith(("$", "<")):
             out.append(("path", m.group(0)))
-    if not g.NOTICE_FILE.search(member):
+    if not g.NOTICE_FILE.search(member) and not FONT.search(member):
         for m in g.EMAIL.finditer(text):
             local = m.group(0).split("@", 1)[0]
-            if (m.group(2).lower() not in g.EMAIL_OK_TLD and not g.EMAIL_OK_DOMAIN.search(m.group(1))
-                    and not g.EMAIL_OK_LOCAL.match(local)):
+            if (TLD.match(m.group(2)) and m.group(2) not in g.EMAIL_OK_TLD and not g.EMAIL_OK_DOMAIN.search(m.group(1))
+                    and not VENDOR_DOMAINS.search(m.group(1)) and not g.EMAIL_OK_LOCAL.match(local)):
                 out.append(("email", m.group(0)))
     for m in g.LEGACY_DOMAIN.finditer(text):
         if not LEGACY_ID_FILE.search(member):

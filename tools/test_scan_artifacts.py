@@ -57,3 +57,11 @@ def test_findings_do_not_print_the_text(tmp_path, capsys):
     p.write_bytes(zipped({"bin/app": MAIL.encode()}))
     assert s.main([str(p)]) == 1
     assert "mail.ru" not in capsys.readouterr().out
+
+
+def test_fonts_vendor_credits_and_dex_names_are_not_addresses():
+    font = b"Copyright 2011 " + MAIL.encode("utf-16-be")[1:] + b" " + MAIL.encode()
+    assert found("m.zip", {"App.app/Contents/Resources/Font-Bold.ttf": font}) == set()
+    assert found("w.zip", {"App/App.exe": b"CRYPTOGAMS by <" + b"someone@" + b"openssl.org>"}) == set()
+    assert found("a.apk", {"classes.dex": b"\x00q" + b"@1.vT\x00Lq" + b"@2.Tv;\x00"}) == set()
+    assert found("a.apk", {"classes.dex": MAIL.encode()}) == {("a.apk!classes.dex", "email")}
