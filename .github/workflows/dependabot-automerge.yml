@@ -3,7 +3,9 @@ name: Dependabot auto-merge
 # Turns on auto-merge for Dependabot's patch and minor updates. GitHub merges
 # the PR only after every check required by the main ruleset is green
 # (.github/rulesets/main.json); a failing check leaves the PR open for a person.
-# Major updates are never merged automatically.
+# Major updates are never merged automatically. A grouped PR counts as major when its group name ends in
+# "-major" (dependabot.yml): fetch-metadata reports the update type of a group by its first member, and
+# 0.x bumps like base64 0.22 to 0.23 come out as "minor", which let the rust-major group merge itself.
 #
 # fetch-metadata reports no update type for npm's "bump X and its ancestor Y" security PRs, so for those
 # the versions Dependabot wrote into its own commit message ("Updates `pkg` from A to B") decide: every
@@ -26,7 +28,7 @@ jobs:
         uses: dependabot/fetch-metadata@v2
 
       - name: Enable auto-merge (squash)
-        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        if: (steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor') && !endsWith(steps.meta.outputs.dependency-group, '-major')
         env:
           GH_TOKEN: ${{ github.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -34,7 +36,7 @@ jobs:
 
       - name: Update type from the commit message
         id: parsed
-        if: steps.meta.outputs.update-type != 'version-update:semver-patch' && steps.meta.outputs.update-type != 'version-update:semver-minor' && steps.meta.outputs.update-type != 'version-update:semver-major'
+        if: steps.meta.outputs.update-type != 'version-update:semver-patch' && steps.meta.outputs.update-type != 'version-update:semver-minor' && steps.meta.outputs.update-type != 'version-update:semver-major' && !endsWith(steps.meta.outputs.dependency-group, '-major')
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -58,7 +60,7 @@ jobs:
         run: gh pr merge --auto --squash "$PR_URL"
 
       - name: Major update
-        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        if: steps.meta.outputs.update-type == 'version-update:semver-major' || endsWith(steps.meta.outputs.dependency-group, '-major')
         env:
           DEPS: ${{ steps.meta.outputs.dependency-names }}
         run: echo "Major update of $DEPS, auto-merge stays off until a maintainer reviews it."
