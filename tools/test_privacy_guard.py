@@ -55,6 +55,9 @@ def test_commit_trailers():
     assert not g.TRAILER.search("Co-Authored-By: zigansh1n <1+zigansh1n@users.noreply.github.com>")
 
 
+SIGNOFF = "Signed-off-by: dependabot[bot] <support@" + "github.com>"
+
+
 def test_commit_people(tmp_path, monkeypatch):
     import subprocess
 
@@ -68,11 +71,18 @@ def test_commit_people(tmp_path, monkeypatch):
     commit("root", me, me)
     commit("ok", me, ("GitHub", "noreply@github.com"))
     commit("leaky committer", me, ("dev", "dev.person@" + "mail.ru"))
+    commit("bump\n\n" + SIGNOFF, me, ("GitHub", "noreply@github.com"))
     commit("ai author", ("Claude", "noreply@" + "anthropic.com"), me)
     monkeypatch.setattr(g, "ROOT", tmp_path)
-    found = {(subject, check) for subject, _, check in g.scan_commits("HEAD~3..HEAD", g.Names(()))}
+    found = {(subject, check) for subject, _, check in g.scan_commits("HEAD~4..HEAD", g.Names(()))}
     assert {check for _, check in found} == {"email", "ai-author"}
     assert len({subject for subject, _ in found}) == 2
+
+
+def test_dependabot_signoff_only_exactly():
+    assert g.DEPENDABOT_SIGNOFF.search("bump\n\n" + SIGNOFF)
+    assert not g.DEPENDABOT_SIGNOFF.search("Signed-off-by: dependabot[bot] <someone@" + "mail.ru>")
+    assert not g.DEPENDABOT_SIGNOFF.search("Signed-off-by: someone <support@" + "github.com>")
 
 
 def doc_checks(rel, text):

@@ -80,6 +80,8 @@ EMAIL_OK_TLD = {"png", "jpg", "jpeg", "gif", "svg", "pdf", "webp", "heic", "exam
                 "local", "swift", "json", "txt"}
 EMAIL_OK_DOMAIN = re.compile(r"(?:^|\.)(?:example\.(?:com|org|net)|users\.noreply\.github\.com)$", re.I)
 EMAIL_OK_LOCAL = re.compile(r"^(?:no-?reply|git|security|conduct)$", re.I)
+# Dependabot appends this exact line to every commit message it writes
+DEPENDABOT_SIGNOFF = re.compile(r"^Signed-off-by: dependabot\[bot\] <support@github\.com>[ \t]*$", re.M)
 NOTICE_FILE = re.compile(r"(?:^|/)(?:LICEN[CS]E|NOTICE|COPYING|OFL|THIRD[_-]?PARTY|ThirdParty|AUTHORS|CREDITS)[^/]*$",
                          re.I)
 
@@ -323,7 +325,7 @@ def scan_commits(rng: str, names: Names):
             out.append((f"commit {short}", 0, "ai-author"))
         for c in names.line(people) | names.line(body):
             out.append((f"commit {short}", 0, c))
-        for m in EMAIL.finditer(people + "\n" + body):
+        for m in EMAIL.finditer(people + "\n" + DEPENDABOT_SIGNOFF.sub("", body)):
             if not EMAIL_OK_DOMAIN.search(m.group(1)) and not EMAIL_OK_LOCAL.match(m.group(0).split("@")[0]):
                 out.append((f"commit {short}", 0, "email"))
     return out
