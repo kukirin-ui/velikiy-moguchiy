@@ -10,6 +10,7 @@
 #import "SPRustBridge.h"
 #import "SPSettingsSidebar.h"
 #import "SPSettingsViews.h"
+#import "SPErrorExplainer.h"
 #import "SPTheme.h"
 #import "SPTriggerKeyPolicy.h"
 #import <Carbon/Carbon.h>
@@ -1740,6 +1741,12 @@ static NSString *SPCondensedProviderError(NSString *raw) {
   qwenKeysScroll.documentView = self.asrQwenKeysTextView;
   qwenKeysScroll.hidden = YES;
   [pane addSubview:qwenKeysScroll];
+  NSButton *keyHelpLink = [self linkButtonWithTitle:@"Как получить ключ"
+                                             action:@selector(openDashScopeKeyHelp:)];
+  keyHelpLink.frame = NSMakeRect(formX, qwenY + 22 - qwenKeysH + 2, labelW, 18);
+  keyHelpLink.tag = 1003;
+  keyHelpLink.hidden = YES;
+  [pane addSubview:keyHelpLink];
 
   CGFloat qwenModeY = qwenY + 22 - qwenKeysH - 12 - 22;
   NSTextField *qwenModeLabel =
@@ -5827,6 +5834,11 @@ static const CGFloat kAsrStatusStripHeight = 34.0;
   }
 
   // Show/hide Qwen fields
+  self.asrTestButton.title = isQwen ? @"Проверить ключ" : @"Проверить";
+  [self.asrTestButton sizeToFit];
+  NSRect testFrame = self.asrTestButton.frame;
+  testFrame.size.height = 28;
+  self.asrTestButton.frame = testFrame;
   [self setHidden:!isQwen
       forViewsMatchingTags:[NSIndexSet indexSetWithIndex:1003]
                     inView:self.currentPaneView];
@@ -8558,7 +8570,204 @@ static void appleSpeechInstallCallback(void *ctx, int32_t eventType,
   self.asrQwenModelCustomField.hidden = !(providerShown && custom);
 }
 
+static NSString *const kDashScopeKeyHelpURL =
+    @"https://github.com/zigansh1n/velikiy-moguchiy/blob/main/docs/DASHSCOPE-KEY.md";
+// What the core reads for a config without asr.qwen.url (default_qwen_url).
+static NSString *const kDashScopeDefaultURL = @"wss://dashscope.aliyuncs.com/api-ws/v1/realtime";
+
+- (NSButton *)linkButtonWithTitle:(NSString *)title action:(SEL)action {
+  NSButton *button = [NSButton buttonWithTitle:title target:self action:action];
+  button.bordered = NO;
+  button.alignment = NSTextAlignmentLeft;
+  button.attributedTitle = [[NSAttributedString alloc]
+      initWithString:title
+          attributes:@{
+            NSFontAttributeName : [NSFont systemFontOfSize:11],
+            NSForegroundColorAttributeName : NSColor.linkColor,
+            NSUnderlineStyleAttributeName : @(NSUnderlineStyleSingle),
+          }];
+  return button;
+}
+
+- (void)openDashScopeKeyHelp:(id)sender {
+  [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:kDashScopeKeyHelpURL]];
+}
+
+static NSString *dashScopeRegionName(NSString *url) {
+  if ([url containsString:@"dashscope-intl.aliyuncs.com"])
+    return @"международный регион";
+  if ([url containsString:@"dashscope.aliyuncs.com"])
+    return @"регион Китай";
+  return @"свой адрес";
+}
+
+/// «Проверить ключ»: every key goes through the core's own connection (the
+/// session is set up and closed before any audio, so it costs nothing).
 - (void)testQwenConnection {
+  if (asrCustomHeaders(@"qwen") != nil) {
+    [self testQwenConnectionWithCustomHeaders];
+    return;
+  }
+  NSArray<NSString *> *keys = [self currentQwenKeys];
+  if (keys.count == 0) {
+    self.asrTestResultLabel.stringValue =
+        @"Сначала вставьте ключ. Где его взять — «Как получить ключ» слева.";
+    self.asrTestResultLabel.textColor = SPTheme.warning;
+    return;
+  }
+  NSString *model = [self selectedQwenModel];
+  if (model.length == 0) {
+    self.asrTestResultLabel.stringValue = @"Сначала укажите модель";
+    self.asrTestResultLabel.textColor = SPTheme.warning;
+    return;
+  }
+  NSString *url = configGet(@"asr.qwen.url");
+  if (url.length == 0)
+    url = kDashScopeDefaultURL;
+
+  self.asrTestButton.enabled = NO;
+  self.asrTestResultLabel.stringValue =
+      keys.count == 1 ? @"Проверка ключа…"
+                      : [NSString stringWithFormat:@"Проверка ключей: %lu…", (unsigned long)keys.count];
+  self.asrTestResultLabel.textColor = [NSColor secondaryLabelColor];
+
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    NSMutableArray<NSDictionary *> *results = [NSMutableArray array];
+    for (NSString *key in keys) {
+      char *raw = sp_dashscope_check_key(url.UTF8String, key.UTF8String, model.UTF8String);
+      NSDictionary *result = nil;
+      if (raw) {
+        NSData *data = [NSData dataWithBytes:raw length:strlen(raw)];
+        sp_core_free_string(raw);
+        result = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+      }
+      [results addObject:[result isKindOfClass:[NSDictionary class]] ? result : @{ @"ok" : @NO }];
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [weakSelf showQwenKeyCheckResults:results url:url model:model];
+    });
+  });
+}
+
+- (void)showQwenKeyCheckResults:(NSArray<NSDictionary *> *)results
+                            url:(NSString *)url
+                          model:(NSString *)model {
+  self.asrTestButton.enabled = YES;
+  NSUInteger failed = 0;
+  NSInteger firstFailure = -1;
+  NSString *otherRegionURL = nil;
+  BOOL everyFailureWorksElsewhere = YES;
+  for (NSUInteger i = 0; i < results.count; i++) {
+    NSDictionary *result = results[i];
+    if ([result[@"ok"] boolValue])
+      continue;
+    failed++;
+    if (firstFailure < 0)
+      firstFailure = (NSInteger)i;
+    NSString *worksAt = [result[@"works_at"] isKindOfClass:[NSString class]] ? result[@"works_at"] : nil;
+    if (worksAt.length > 0 && (!otherRegionURL || [otherRegionURL isEqualToString:worksAt])) {
+      otherRegionURL = worksAt;
+    } else {
+      everyFailureWorksElsewhere = NO;
+    }
+    NSLog(@"[VelikiyMoguchiy] DashScope key #%lu check failed: %@", (unsigned long)i + 1,
+          result[@"message"] ?: @"no result");
+  }
+
+  NSString *region = dashScopeRegionName(url);
+  self.asrTestResultLabel.toolTip = nil;
+  if (failed == 0) {
+    self.asrTestResultLabel.stringValue =
+        results.count == 1
+            ? [NSString stringWithFormat:@"Ключ работает (%@)", region]
+            : [NSString stringWithFormat:@"Все ключи работают: %lu (%@)", (unsigned long)results.count, region];
+    self.asrTestResultLabel.textColor = SPTheme.success;
+    return;
+  }
+
+  NSDictionary *first = results[(NSUInteger)firstFailure];
+  NSString *message = [first[@"message"] isKindOfClass:[NSString class]] ? first[@"message"] : @"";
+  NSString *reason;
+  if (otherRegionURL && everyFailureWorksElsewhere) {
+    reason = [NSString stringWithFormat:@"создан для другого региона (%@)", dashScopeRegionName(otherRegionURL)];
+  } else {
+    switch ([SPErrorExplainer kindForMessage:message]) {
+      case SPErrorKindBadKey:
+        reason = @"сервис его не принял: скопируйте ключ целиком";
+        break;
+      case SPErrorKindNoBalance:
+        reason = @"закончился баланс или бесплатный лимит";
+        break;
+      case SPErrorKindRateLimit:
+        reason = @"слишком много запросов, повторите через минуту";
+        break;
+      case SPErrorKindAccessDenied:
+        reason = [NSString stringWithFormat:@"нет доступа к модели «%@»", model];
+        break;
+      case SPErrorKindTimeout:
+      case SPErrorKindNetwork:
+      case SPErrorKindService:
+        reason = @"нет связи с DashScope, проверьте интернет или VPN";
+        break;
+      default:
+        reason = [[SPErrorExplainer explanationForMessage:message recordingKept:NO].shortText lowercaseString];
+        break;
+    }
+  }
+  NSString *which = results.count == 1
+                        ? @"Ключ"
+                        : [NSString stringWithFormat:@"Ключ %ld из %lu", (long)firstFailure + 1,
+                                                     (unsigned long)results.count];
+  NSString *text = [NSString stringWithFormat:@"%@: %@", which, reason];
+  if (failed > 1)
+    text = [text stringByAppendingFormat:@" (не работают: %lu)", (unsigned long)failed];
+  self.asrTestResultLabel.stringValue = text;
+  self.asrTestResultLabel.toolTip = text;
+  self.asrTestResultLabel.textColor = SPTheme.failure;
+
+  if (otherRegionURL && everyFailureWorksElsewhere) {
+    [self offerDashScopeRegionSwitchTo:otherRegionURL from:url];
+  }
+}
+
+/// Only on the user's click: the endpoint changes, nothing else does.
+- (void)offerDashScopeRegionSwitchTo:(NSString *)otherURL from:(NSString *)currentURL {
+  NSAlert *alert = [[NSAlert alloc] init];
+  alert.alertStyle = NSAlertStyleInformational;
+  alert.messageText = @"Ключ из другого региона";
+  alert.informativeText = [NSString stringWithFormat:
+      @"Ключ работает в %@, а приложение сейчас подключается к %@ адресу. Переключить адрес?\n\n"
+      @"Остальные настройки не изменятся. Вернуть прежний адрес можно в config.yaml: asr.qwen.url.",
+      [otherURL containsString:@"dashscope-intl"] ? @"международном регионе" : @"регионе Китай",
+      [currentURL containsString:@"dashscope-intl"] ? @"международному" : @"китайскому"];
+  [alert addButtonWithTitle:@"Переключить"];
+  [alert addButtonWithTitle:@"Оставить"];
+  __weak typeof(self) weakSelf = self;
+  [alert beginSheetModalForWindow:self.window
+                completionHandler:^(NSModalResponse response) {
+                  __strong typeof(weakSelf) strongSelf = weakSelf;
+                  if (!strongSelf || response != NSAlertFirstButtonReturn)
+                    return;
+                  if (!configSet(@"asr.qwen.url", otherURL)) {
+                    strongSelf.asrTestResultLabel.stringValue = @"Не удалось сохранить адрес";
+                    strongSelf.asrTestResultLabel.textColor = SPTheme.failure;
+                    return;
+                  }
+                  NSLog(@"[VelikiyMoguchiy] asr.qwen.url switched by the user to %@", otherURL);
+                  strongSelf.asrTestResultLabel.stringValue =
+                      [NSString stringWithFormat:@"Адрес переключён, ключ работает (%@)",
+                                                 dashScopeRegionName(otherURL)];
+                  strongSelf.asrTestResultLabel.textColor = SPTheme.success;
+                  if ([strongSelf.delegate respondsToSelector:@selector(setupWizardDidSaveConfig)]) {
+                    [strongSelf.delegate setupWizardDidSaveConfig];
+                  }
+                }];
+}
+
+/// With asr.qwen.headers the core sends those headers instead of the key, so
+/// only the handshake can be checked.
+- (void)testQwenConnectionWithCustomHeaders {
   // Get current key value (account for plain/secure toggle state)
   NSString *apiKey = [self currentQwenKeys].firstObject ?: @"";
 

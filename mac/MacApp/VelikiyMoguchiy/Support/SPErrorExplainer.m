@@ -105,7 +105,7 @@ static SPErrorExplanation *makeExplanation(SPErrorKind kind, NSString *shortText
         case SPErrorKindBadKey:
             return makeExplanation(kind, @"Ключ не подходит",
                                    @"Сервис не принял ключ. Проверьте ключ и регион (Китай или международный): "
-                                   @"Настройки → Распознавание.",
+                                   @"Настройки → Распознавание → «Проверить ключ».",
                                    SPErrorActionAsrSettings, message);
         case SPErrorKindNoBalance:
             return makeExplanation(kind, @"Закончился баланс ключа",

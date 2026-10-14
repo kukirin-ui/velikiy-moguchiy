@@ -72,7 +72,7 @@ cd velikiy-moguchiy
 | Общее обучение | `cd federated && .venv/bin/python -m pytest` | [`federated/README.md`](federated/README.md) |
 
 Ключ провайдера распознавания (для русского — DashScope, модели Qwen) вы указываете сами в настройках
-приложения; в репозитории и в сборках ключей нет.
+приложения; в репозитории и в сборках ключей нет. Как получить ключ и выбрать регион: [`docs/DASHSCOPE-KEY.md`](docs/DASHSCOPE-KEY.md).
 
 <p align="center"><img src="design/readme/divider-rosette.svg" width="520" alt=""></p>
 

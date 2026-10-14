@@ -1504,6 +1504,9 @@ where
     }
     Ok(name)
 }
+/// For a config without `asr.qwen.url`: such configs were written when the
+/// China endpoint was the only one, so it stays theirs. New configs get the
+/// international endpoint from DEFAULT_CONFIG_YAML.
 fn default_qwen_url() -> String {
     "wss://dashscope.aliyuncs.com/api-ws/v1/realtime".into()
 }
@@ -2585,7 +2588,9 @@ asr:
 
   # Qwen (Aliyun DashScope) Realtime ASR
   qwen:
-    url: "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+    # International (Singapore) endpoint; keys made in the China console work
+    # at wss://dashscope.aliyuncs.com/api-ws/v1/realtime instead
+    url: "wss://dashscope-intl.aliyuncs.com/api-ws/v1/realtime"
     api_key: ""
     # api_keys: []       # several DashScope keys: the next one is used when a key is rejected or out of quota
     model: "qwen3.8-omni-flash-realtime"  # or qwen3-asr-flash-realtime: verbatim, no rewording
@@ -3249,6 +3254,16 @@ mod tests {
             };
             assert_eq!(r.max_duration(), expected, "{value}");
         }
+    }
+
+    #[test]
+    fn new_configs_use_the_international_endpoint_and_old_ones_keep_china() {
+        let root: serde_yaml::Value = serde_yaml::from_str(DEFAULT_CONFIG_YAML).unwrap();
+        assert_eq!(
+            root["asr"]["qwen"]["url"].as_str(),
+            Some(crate::dashscope_check::INTERNATIONAL_URL)
+        );
+        assert_eq!(default_qwen_url(), crate::dashscope_check::CHINA_URL);
     }
 
     #[test]

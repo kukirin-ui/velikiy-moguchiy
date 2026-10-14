@@ -3,6 +3,7 @@ pub mod asr_factory;
 pub mod audio_buffer;
 pub mod commands;
 pub mod config;
+pub mod dashscope_check;
 pub mod dictionary;
 pub mod errors;
 pub mod ffi;
@@ -2032,6 +2033,37 @@ pub unsafe extern "C" fn sp_llm_test(
     CString::new(json.to_string())
         .unwrap_or_default()
         .into_raw()
+}
+
+/// Checks one DashScope key (see `dashscope_check`): blocks for up to about
+/// half a minute, so call it off the main thread.
+///
+/// Returns a heap-allocated JSON string:
+///   `{"ok": true,  "message": "", "works_at": null}`
+///   `{"ok": false, "message": "<provider error>", "works_at": "<other region URL>" | null}`
+///
+/// # Safety
+/// Pointer parameters must be valid null-terminated C strings (or null).
+/// Caller must free the returned pointer with `sp_core_free_string()`.
+#[no_mangle]
+pub unsafe extern "C" fn sp_dashscope_check_key(
+    url: *const c_char,
+    key: *const c_char,
+    model: *const c_char,
+) -> *mut c_char {
+    let url = unsafe { cstr_to_str(url) }.unwrap_or_default().to_string();
+    let key = unsafe { cstr_to_str(key) }.unwrap_or_default().trim().to_string();
+    let model = unsafe { cstr_to_str(model) }.unwrap_or_default().to_string();
+    let check = match Runtime::new() {
+        Ok(rt) => rt.block_on(dashscope_check::check_key_and_region(&url, &key, &model)),
+        Err(e) => dashscope_check::KeyCheck {
+            ok: false,
+            message: format!("Failed to create async runtime: {e}"),
+            works_at: None,
+        },
+    };
+    let json = serde_json::to_string(&check).unwrap_or_else(|_| "{\"ok\":false}".into());
+    CString::new(json).unwrap_or_default().into_raw()
 }
 
 /// List remote models from OpenAI-compatible `{base_url}/models`.
