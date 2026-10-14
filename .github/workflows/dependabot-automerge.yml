@@ -4,6 +4,10 @@ name: Dependabot auto-merge
 # the PR only after every check required by the main ruleset is green
 # (.github/rulesets/main.json); a failing check leaves the PR open for a person.
 # Major updates are never merged automatically.
+#
+# fetch-metadata reports no update type for npm's "bump X and its ancestor Y" security PRs, so for those
+# the versions Dependabot wrote into its own commit message ("Updates `pkg` from A to B") decide: every
+# pair must be a patch or minor step. A PR without such lines stays with a person.
 
 on: pull_request
 
@@ -23,6 +27,31 @@ jobs:
 
       - name: Enable auto-merge (squash)
         if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
+
+      - name: Update type from the commit message
+        id: parsed
+        if: steps.meta.outputs.update-type != 'version-update:semver-patch' && steps.meta.outputs.update-type != 'version-update:semver-minor' && steps.meta.outputs.update-type != 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits" --jq '.[0].commit.message' > "$RUNNER_TEMP/commit.txt"
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import os, re
+          text = open(os.path.join(os.environ["RUNNER_TEMP"], "commit.txt"), encoding="utf-8").read()
+          pairs = re.findall(r"^Updates `[^`\n]+` from (\S+) to (\S+)$", text, re.M)
+          def nums(v):
+              return [int(x) for x in re.findall(r"\d+", v)[:3]]
+          safe = bool(pairs) and all(nums(a)[:1] == nums(b)[:1] and nums(a) != [] for a, b in pairs)
+          print(f"safe={'true' if safe else 'false'}")
+          EOF
+
+      - name: Enable auto-merge (squash, from the commit message)
+        if: steps.parsed.outputs.safe == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
