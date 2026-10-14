@@ -248,7 +248,8 @@ fn worker_loop(
                     .get_result(&stream)
                     .map(|r| r.text)
                     .unwrap_or_default();
-                let final_text = format!("{}{}", accumulated_text, result_text);
+                let mut final_text = accumulated_text.clone();
+                crate::transcript::append_segment(&mut final_text, &result_text);
                 let _ = event_tx.blocking_send(AsrEvent::Final(final_text));
                 break;
             }
@@ -276,14 +277,15 @@ fn worker_loop(
         // Check endpoint (sentence boundary detected)
         if recognizer.is_endpoint(&stream) {
             if !result_text.is_empty() {
-                accumulated_text.push_str(&result_text);
+                crate::transcript::append_segment(&mut accumulated_text, &result_text);
                 let _ = event_tx.blocking_send(AsrEvent::Definite(accumulated_text.clone()));
             }
             recognizer.reset(&stream);
             last_text = String::new();
         } else {
             // Emit Interim if text changed
-            let current = format!("{}{}", accumulated_text, result_text);
+            let mut current = accumulated_text.clone();
+            crate::transcript::append_segment(&mut current, &result_text);
             if current != last_text && !current.is_empty() {
                 let _ = event_tx.blocking_send(AsrEvent::Interim(current.clone()));
                 last_text = current;

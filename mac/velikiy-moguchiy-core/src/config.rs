@@ -1507,7 +1507,7 @@ fn default_mlx_language() -> String {
     "auto".into()
 }
 fn default_sherpa_onnx_model() -> String {
-    "sherpa-onnx/bilingual-zh-en".into()
+    "sherpa-onnx/ru-vosk-small".into()
 }
 fn default_sherpa_onnx_num_threads() -> i32 {
     2
@@ -2598,7 +2598,7 @@ asr:
 
   # Sherpa-ONNX local ASR (CPU)
   sherpa-onnx:
-    model: "sherpa-onnx/bilingual-zh-en"    # relative to ~/.velikiy-moguchiy/models/, or absolute path
+    model: "sherpa-onnx/ru-vosk-small"    # relative to ~/.velikiy-moguchiy/models/, or absolute path
     num_threads: 2
     hotwords_score: 1.5         # dictionary term boost
     endpoint_silence: 1.2       # trailing silence for sentence boundary (seconds)
@@ -2812,6 +2812,7 @@ const DEFAULT_MANIFESTS: &[(&str, &str)] = &[
     manifest!("mlx/Qwen3-ASR-1.7B-4bit"),
     manifest!("mlx/Qwen3-0.6B-4bit"),
     manifest!("mlx/Qwen3-1.7B-4bit"),
+    manifest!("sherpa-onnx/ru-vosk-small"),
     manifest!("sherpa-onnx/bilingual-zh-en"),
     manifest!("sherpa-onnx/multilingual-8lang"),
     manifest!("sherpa-onnx/zh-xlarge"),

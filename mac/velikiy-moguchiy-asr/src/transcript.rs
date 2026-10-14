@@ -5,6 +5,29 @@ pub fn is_silent_transcript(text: &str) -> bool {
     !text.chars().any(char::is_alphanumeric)
 }
 
+/// Appends a recognized segment to the text before it. Segments of a
+/// space-separated script (Russian, English) need a space between them, while
+/// Chinese and Japanese ones are written together.
+pub fn append_segment(text: &mut String, segment: &str) {
+    let segment = segment.trim();
+    if segment.is_empty() {
+        return;
+    }
+    let needs_space = match (text.chars().last(), segment.chars().next()) {
+        (Some(last), Some(first)) => !last.is_whitespace() && !is_cjk(last) && !is_cjk(first),
+        _ => false,
+    };
+    if needs_space {
+        text.push(' ');
+    }
+    text.push_str(segment);
+}
+
+fn is_cjk(c: char) -> bool {
+    matches!(c as u32,
+        0x3000..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF)
+}
+
 /// Aggregates ASR interim, definite, and final results into a single final transcript.
 /// Also collects interim revision history to help identify uncertain segments.
 pub struct TranscriptAggregator {
@@ -217,5 +240,24 @@ mod silence_tests {
         for text in ["да", "Да.", "ok", "5", " ... а ... ", "ё"] {
             assert!(!is_silent_transcript(text), "{text:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod segment_tests {
+    use super::append_segment;
+
+    #[test]
+    fn spaces_words_but_not_cjk() {
+        let mut text = String::new();
+        append_segment(&mut text, "привет");
+        append_segment(&mut text, " как дела ");
+        assert_eq!(text, "привет как дела");
+        let mut zh = String::from("你好");
+        append_segment(&mut zh, "世界");
+        assert_eq!(zh, "你好世界");
+        let mut unchanged = String::from("ok");
+        append_segment(&mut unchanged, "  ");
+        assert_eq!(unchanged, "ok");
     }
 }

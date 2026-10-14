@@ -1,0 +1,31 @@
+{
+    "provider": "sherpa-onnx",
+    "description": "Russian (Vosk small streaming, Apache-2.0)",
+    "repo": "csukuangfj/sherpa-onnx-streaming-zipformer-small-ru-vosk-int8-2025-08-16",
+    "files": [
+        {
+            "name": "decoder.onnx",
+            "size": 2093080,
+            "sha256": "89b3088a9e20e1ef7f2e85ce1a3478afe6a9c4ac57369cabcc4beb8e95328ea0",
+            "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-small-ru-vosk-int8-2025-08-16/resolve/31fa603e4f31279c6e1f7600fed13dc4312663ab/decoder.onnx"
+        },
+        {
+            "name": "encoder.int8.onnx",
+            "size": 26214060,
+            "sha256": "e0db705e94ec35d803b1df4f40cda23d064e1142977c80ab288430b109777a9d",
+            "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-small-ru-vosk-int8-2025-08-16/resolve/31fa603e4f31279c6e1f7600fed13dc4312663ab/encoder.int8.onnx"
+        },
+        {
+            "name": "joiner.int8.onnx",
+            "size": 259417,
+            "sha256": "b55784b071ab7512eab4c7c44e4f5478284ef33c83562cc6a249b972515a31e5",
+            "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-small-ru-vosk-int8-2025-08-16/resolve/31fa603e4f31279c6e1f7600fed13dc4312663ab/joiner.int8.onnx"
+        },
+        {
+            "name": "tokens.txt",
+            "size": 6388,
+            "sha256": "93bbbc0bae6b78c0bbb743d4aa9fded3bb5ff3aac5f0200e3a769a5a05e0fdf6",
+            "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-small-ru-vosk-int8-2025-08-16/resolve/31fa603e4f31279c6e1f7600fed13dc4312663ab/tokens.txt"
+        }
+    ]
+}

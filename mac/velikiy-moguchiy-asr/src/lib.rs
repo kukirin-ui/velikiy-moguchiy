@@ -74,6 +74,6 @@ pub use provider::AsrProvider;
 pub use qwen::QwenAsrProvider;
 #[cfg(feature = "sherpa-onnx")]
 pub use sherpa_onnx::{SherpaOnnxConfig, SherpaOnnxProvider};
-pub use transcript::{is_silent_transcript, TranscriptAggregator};
+pub use transcript::{append_segment, is_silent_transcript, TranscriptAggregator};
 #[cfg(feature = "wetype-offline")]
 pub use wetype::{ensure_model, model_present, ModelAsset, WeTypeModelSpec, WeTypeOfflineProvider};

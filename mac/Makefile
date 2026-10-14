@@ -18,7 +18,7 @@ generate:
 	cd MacApp && xcodegen generate
 
 build-rust:
-	cargo build --manifest-path velikiy-moguchiy-core/Cargo.toml --release --target $(ARCH) --no-default-features --features "apple-speech"
+	SHERPA_ONNX_LIB_DIR="$$(scripts/sherpa-onnx-libs.sh)" cargo build --manifest-path velikiy-moguchiy-core/Cargo.toml --release --target $(ARCH) --no-default-features --features "apple-speech,sherpa-onnx"
 	cargo build --package velikiy-moguchiy-cli --release --target $(ARCH)
 
 build-xcode:
