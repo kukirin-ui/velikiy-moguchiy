@@ -1,0 +1,89 @@
+/* «Великий & Могучий» — русская локализация */
+
+/* ─── Status Bar ─── */
+"statusBar.status.ready" = "Готов — v%@ (%@)";
+"statusBar.status.listening" = "Слушаю…";
+"statusBar.status.connecting" = "Подключение…";
+"statusBar.status.recognizing" = "Распознаю…";
+"statusBar.status.thinking" = "Обрабатываю…";
+"statusBar.status.pasting" = "Вставляю…";
+"statusBar.status.error" = "Ошибка";
+"statusBar.status.working" = "Работаю…";
+
+"statusBar.shortcut.format" = "Шорткат: %@";
+
+"statusBar.section.statistics" = "Статистика";
+"statusBar.stats.total" = "  Всего: %@";
+"statusBar.stats.totalNone" = "  Всего: пока нет данных";
+"statusBar.stats.chars" = "%ld симв.";
+"statusBar.stats.words" = "%ld сл.";
+"statusBar.stats.time" = "  Время: %ld мин %ld с | сессий: %ld";
+"statusBar.stats.timeNone" = "  Время: --";
+"statusBar.stats.speedChars" = "  Скорость: %.0f симв./мин";
+"statusBar.stats.speedWords" = "  Скорость: %.0f сл./мин";
+"statusBar.stats.speedNone" = "  Скорость: --";
+
+"statusBar.section.permissions" = "Разрешения";
+"statusBar.permission.checking" = "Проверка…";
+"statusBar.permission.granted" = "Выдано";
+"statusBar.permission.notGranted" = "Не выдано ▸";
+"statusBar.permission.microphone" = "  Микрофон: %@";
+"statusBar.permission.accessibility" = "  Универсальный доступ: %@";
+"statusBar.permission.inputMonitoring" = "  Мониторинг ввода: %@";
+"statusBar.permission.notifications" = "  Уведомления: %@";
+"statusBar.permission.speechRecognition" = "  Распознавание речи: %@";
+
+"statusBar.menu.startVoiceInput" = "Начать диктовку";
+"statusBar.menu.stopVoiceInput" = "Остановить диктовку";
+
+"statusBar.menu.microphone" = "Микрофон";
+"statusBar.menu.systemDefault" = "Системный по умолчанию";
+"statusBar.menu.unavailable" = "%@ (недоступен)";
+
+"statusBar.menu.recentDictations" = "Последние диктовки…";
+"statusBar.menu.setupWizard" = "Настройки…";
+"statusBar.menu.openConfig" = "Открыть папку настроек…";
+"statusBar.menu.checkUpdates" = "Проверить обновления…";
+"statusBar.menu.launchAtLogin" = "Запускать при входе";
+"statusBar.menu.quit" = "Завершить «Великий & Могучий»";
+
+
+/* ─── Notifications ─── */
+"notification.error.title" = "«Великий & Могучий»: ошибка";
+"notification.warning.title" = "«Великий & Могучий»: предупреждение";
+
+/* ─── Permissions Alerts ─── */
+"permission.microphone.title" = "Нужен доступ к микрофону";
+"permission.microphone.message" = "Приложению «Великий & Могучий» нужен доступ к микрофону, чтобы записывать вашу речь.\n\nВыдайте разрешение в Системных настройках → Конфиденциальность и безопасность → Микрофон.";
+"permission.accessibility.title" = "Нужен универсальный доступ";
+"permission.accessibility.message" = "Приложению «Великий & Могучий» нужно разрешение «Универсальный доступ», чтобы вставлять исправленный текст в активное приложение.\n\nБез него текст будет скопирован в буфер обмена, но не вставится автоматически.\n\nВыдайте доступ в Системных настройках → Конфиденциальность и безопасность → Универсальный доступ.";
+"permission.inputMonitoring.title" = "Нужен мониторинг ввода";
+"permission.inputMonitoring.message" = "Приложению «Великий & Могучий» нужно разрешение «Мониторинг ввода», чтобы отслеживать горячую клавишу во всей системе.\n\nБез него приложение не сможет начать запись по нажатию клавиши.\n\nВыдайте доступ в Системных настройках → Конфиденциальность и безопасность → Мониторинг ввода.";
+"permission.speechRecognition.title" = "Нужен доступ к распознаванию речи";
+"permission.speechRecognition.message" = "Приложению «Великий & Могучий» нужно разрешение «Распознавание речи», чтобы использовать распознавание на устройстве (Apple Speech).\n\nВыдайте доступ в появившемся окне или включите его в Системных настройках → Конфиденциальность и безопасность → Распознавание речи.";
+"permission.button.openSettings" = "Открыть настройки";
+"permission.button.dismiss" = "Закрыть";
+"permission.button.dontRemind" = "Больше не напоминать";
+
+/* ─── Language Settings ─── */
+"settings.language.title" = "Язык интерфейса";
+"settings.language.followSystem" = "Как в системе";
+"settings.language.restartRequired" = "Чтобы язык применился полностью, перезапустите «Великий & Могучий».";
+"settings.language.restartTitle" = "Язык изменён";
+"settings.language.restartMessage" = "Язык интерфейса изменён. Для обновления некоторых элементов нужно перезапустить «Великий & Могучий».";
+"settings.language.restartButton" = "OK";
+
+/* ─── Edit Menu ─── */
+"menu.edit" = "Правка";
+"menu.edit.undo" = "Отменить";
+"menu.edit.redo" = "Повторить";
+"menu.edit.cut" = "Вырезать";
+"menu.edit.copy" = "Скопировать";
+"menu.edit.paste" = "Вставить";
+"menu.edit.selectAll" = "Выбрать всё";
+
+"error.asr.timeout" = "Превышено время подключения к ASR";
+"error.asr.service" = "Ошибка сервиса ASR";
+"error.asr.auth" = "Ошибка авторизации ASR";
+"error.audio" = "Микрофон недоступен";
+"error.asr.unknown" = "Ошибка ASR";

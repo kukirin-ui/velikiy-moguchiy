@@ -1,0 +1,43 @@
+# Licences allowed for dependencies of the whole repository: Rust (mac/) and
+# Python (lipread/, federated/). tools/licenses/check.py reads this file, builds
+# the cargo-deny config from it and checks the Python packages itself.
+#
+# Copyleft (GPL, AGPL, LGPL, SSPL) is never added here: the apps are MIT and are
+# shipped as binaries. A dependency licensed "MIT OR LGPL" passes through MIT.
+
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "CNRI-Python",
+    "HPND",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MIT-CMU",
+    # Copyleft per file only: changes to MPL files stay open, the app around them does not.
+    "MPL-2.0",
+    "PSF-2.0",
+    "Python-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+# Python packages whose PyPI metadata names no recognisable licence. The value is
+# the SPDX expression read from the package's own LICENSE file at that version.
+# Example:  some-package = "MIT"
+[python.clarify]
+
+# A single package allowed despite a licence not in `allow`, with the reason.
+# Example:  some-package = { license = "LGPL-3.0-only", reason = "..." }
+[python.exceptions]
+
+# Same for crates; the reason is required.
+# Example:  some-crate = { license = "LGPL-2.1-only", reason = "..." }
+[rust.exceptions]

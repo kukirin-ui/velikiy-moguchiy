@@ -1,0 +1,53 @@
+MIT License
+
+Copyright (c) 2026 zigansh1n (founder and author) and the Velikiy Moguchiy contributors
+Copyright (c) 2026 Vincent Yang (koe, https://github.com/missuo/koe)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+
+Scope
+
+The MIT License above covers the code of this repository (mac/, lipread/,
+federated/, tools/, design/ including the app icon) and its documentation, except for the parts that carry
+their own license:
+
+- mac/ is a fork of koe by Vincent Yang. koe's original notice is kept
+  unchanged in mac/LICENSE.
+- ios/ is based on GeminiKeyboardSample and is distributed under the
+  Apache License 2.0 (full text in ios/LICENSE); the changes made to
+  the sample are listed in ios/THIRD_PARTY.md.
+- mac/vendor/lipflow/ (MIT, Amy Zhou; its espnet/ part Apache-2.0) and
+  mac/vendor/mic-warm/ (MIT, Drew Burchfield) keep their own LICENSE files.
+- Code ported from other projects is listed with its license in
+  THIRD_PARTY.md, mac/THIRD_PARTY.md and ios/THIRD_PARTY_NOTICES.md.
+- The paintings used in the artwork (design/readme/*.jpg, the painting
+  inside design/readme/banner.svg and the Mac About pane) are public-domain
+  works by Vasnetsov, Roerich, Ryabushkin and Bilibin; THIRD_PARTY.md
+  lists their sources.
+- The bundled fonts Oglavie, Monomakh (fonts-cu, Aleksandr Andreev and
+  Nikita Simmons) and Old Standard TT (mac/.../Fonts/, ios/App/Fonts/), and
+  Vertograd used by the artwork generator (design/old-rus/fonts/), are under
+  the SIL Open Font License 1.1, whose text sits next to them.
+
+Model weights are not part of this repository and are not covered by this
+license. MultiVSR has no license: its weights are downloaded from the authors
+by lipread/download_weights.sh and are never redistributed here. See
+THIRD_PARTY.md for models, datasets and services.

@@ -1,0 +1,75 @@
+name: Licences
+
+# Fails when a Rust or Python dependency has a licence that is not in
+# tools/licenses/allowlist.toml: copyleft (GPL, AGPL, LGPL, SSPL) or one that
+# cannot be recognised. Runs on pull requests that touch dependencies and
+# weekly, because federated/ has no lock file and its resolution can drift.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: licences-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect changed dependencies
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      python: ${{ steps.filter.outputs.python }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            common: &common
+              - "tools/licenses/**"
+              - ".github/workflows/licenses.yml"
+            rust:
+              - *common
+              - "mac/Cargo.toml"
+              - "mac/Cargo.lock"
+              - "mac/velikiy-moguchiy-*/Cargo.toml"
+            python:
+              - *common
+              - "lipread/pyproject.toml"
+              - "lipread/uv.lock"
+              - "federated/pyproject.toml"
+
+  rust:
+    name: Licences (Rust)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - name: Check
+        run: python3 tools/licenses/check.py rust
+
+  python:
+    name: Licences (Python)
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Parser self-test
+        run: python3 tools/licenses/check.py selftest
+      - name: Check
+        run: python3 tools/licenses/check.py python

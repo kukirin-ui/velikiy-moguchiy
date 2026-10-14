@@ -1,0 +1,6 @@
+# Owners review and approve changes in their paths. The last matching line wins.
+# Co-maintainers from the community are added next to the owner, for example:
+#   /lipread/    @zigansh1n @co-maintainer
+#   /federated/  @zigansh1n @co-maintainer
+
+*  @zigansh1n

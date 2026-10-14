@@ -1,0 +1,43 @@
+name: Исключить мои видео
+description: Владелец канала YouTube просит не использовать его видео для обучения модели чтения по губам
+title: "[Исключение] "
+labels: [data-exclusion]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Модель чтения по губам дообучается на публичных видео YouTube. Если вы владелец канала и не хотите, чтобы его
+        видео использовались, заполните эту форму.
+
+        **Что будет дальше**
+        - Видео канала будут исключены из данных **следующей версии модели**. Уже выпущенные версии не меняются:
+          из готовых весов нельзя удалить вклад отдельных видео.
+        - В открытый [журнал исключений](https://github.com/zigansh1n/velikiy-moguchiy/blob/main/data-governance/exclusions/README.md)
+          записывается **только идентификатор канала** и дата. Название канала, ваше имя и причина не записываются.
+        - После обработки ссылку на канал в этом issue уберут, issue закроют.
+
+        Issue виден всем. Не пишите сюда телефон, почту и другие личные данные.
+  - type: input
+    id: channel
+    attributes:
+      label: Ссылка на канал
+      placeholder: https://www.youtube.com/@имя или https://www.youtube.com/channel/UC…
+    validations:
+      required: true
+  - type: textarea
+    id: proof
+    attributes:
+      label: Подтверждение, что канал ваш
+      description: |
+        Самый простой способ: на время проверки добавьте в описание канала строку `velikiy-moguchiy: исключить`
+        и напишите здесь, что добавили (после закрытия issue её можно удалить).
+        Другой способ — ссылка на ваш профиль GitHub в описании или ссылках канала.
+    validations:
+      required: true
+  - type: checkboxes
+    id: owner
+    attributes:
+      label: Подтверждение
+      options:
+        - label: Я владелец этого канала или действую по его поручению
+          required: true

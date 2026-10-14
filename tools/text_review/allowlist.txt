@@ -1,0 +1,7 @@
+# Known false positives of tools/text_review.py. One rule per line:
+#   file glob | regex matched against the quoted text | why it is fine
+# The reason is shown to the model too. Keep each rule narrow: a file and a phrase, not a whole category.
+
+* | zigansh1n | публичный аккаунт проекта на GitHub, единственное разрешённое имя автора
+* | черновик\w* (релиза|выпуска) | «черновик релиза» — состояние выпуска на GitHub, а не черновик документа
+README.md | (Васнецов|Рерих|Рябушкин|Билибин|Тургенев) | авторы картин и цитаты из общественного достояния

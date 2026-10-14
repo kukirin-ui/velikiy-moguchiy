@@ -1,0 +1,47 @@
+name: Privacy guard
+
+# tools/privacy_guard.py on every push and pull request: secrets, personal paths and identifiers,
+# names of people whose videos were collected, data lists, media outside the UI folders, documents
+# not ready for publication (drafts, notes to a lawyer, TODO, placeholders in square brackets), and
+# attribution trailers in the new commits. Findings name the file and the check, not the text.
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: privacy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Privacy guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Guard tests
+        run: python3 -m pip install -q pytest && python3 -m pytest -q -p no:cacheprovider tools/test_privacy_guard.py
+      - name: Files
+        env:
+          PRIVACY_GUARD_EXTRA: ${{ secrets.PRIVACY_GUARD_EXTRA }}
+        run: python3 tools/privacy_guard.py
+      - name: Commit messages
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            BASE=$(git merge-base origin/main "$HEAD" 2>/dev/null || true)
+          fi
+          if [ -n "$BASE" ] && [ "$BASE" != "$HEAD" ]; then
+            python3 tools/privacy_guard.py --commits "$BASE..$HEAD" -- tools/privacy_guard.py
+          fi

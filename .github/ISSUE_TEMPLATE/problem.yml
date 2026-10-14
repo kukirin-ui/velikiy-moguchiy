@@ -1,0 +1,72 @@
+name: Сообщить о проблеме
+description: Что-то работает не так, как ожидалось
+title: "[Проблема] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо, что сообщаете! **Не вставляйте сюда ключи API, записи голоса, видео с лицом и тексты диктовок.**
+        Уязвимость — не сюда: Security → Report a vulnerability.
+        Если вы открыли эту форму кнопкой «Сообщить о проблеме» в приложении, версия, система и лог уже заполнены.
+  - type: dropdown
+    id: product
+    attributes:
+      label: Часть проекта
+      options:
+        - Диктовка для macOS (mac/)
+        - Клавиатура для iPhone (ios/)
+        - Чтение по губам (lipread/)
+        - Общее обучение (federated/)
+        - Сборка, CI, документация
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Версия приложения
+      description: «О программе» на Mac, «Настройки» на iPhone, или коммит, из которого собирали
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Версия macOS или iOS и устройство
+      placeholder: macOS 26.1, MacBook Air M2 / iOS 26.0, iPhone 16
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как повторить
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что ожидали
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Что произошло на самом деле
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Провайдер распознавания
+      placeholder: Qwen (DashScope), Doubao, Apple Speech, MLX…
+  - type: textarea
+    id: log
+    attributes:
+      label: Лог
+      description: |
+        Кнопка «Сообщить о проблеме» в приложении вставит его сама: без ключей и без текстов диктовок.
+        Если вставляете вручную, уберите ключи, пути с вашим именем и тексты диктовок.
+      render: text

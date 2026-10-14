@@ -1,0 +1,6 @@
+/* The bundle is VelikiyMoguchiy.app (Latin, safe for scripts); Finder, Launchpad,
+   Spotlight, notifications and System Settings show this name instead
+   (LSHasLocalizedDisplayName in Info.plist): «Великий & Могучий» in Russian,
+   Velikiy Moguchiy in every other language. */
+"CFBundleDisplayName" = "Великий & Могучий";
+"CFBundleName" = "Великий & Могучий";

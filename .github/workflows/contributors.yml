@@ -1,0 +1,62 @@
+name: Contributors table
+
+# README.md shows a contributors table between <!-- contributors:start --> and
+# <!-- contributors:end -->. Its source is contributors.json (schema:
+# tools/contributors/contributors.schema.json). On main the table is
+# regenerated and committed; in pull requests it is only checked. The commit is
+# pushed with the BOT_PUSH_KEY deploy key, the one way past the main ruleset
+# (docs/AUTOMATION.md).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - contributors.json
+      - tools/contributors/**
+      - .github/workflows/contributors.yml
+  pull_request:
+    paths:
+      - contributors.json
+      - README.md
+      - tools/contributors/**
+      - .github/workflows/contributors.yml
+  workflow_dispatch:
+
+concurrency:
+  group: contributors-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check the table
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate contributors.json and compare README.md
+        run: python3 tools/contributors/render.py --check
+
+  update:
+    name: Regenerate the table
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.BOT_PUSH_KEY }}
+      - name: Render
+        run: python3 tools/contributors/render.py
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- README.md; then
+            echo "README.md is up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update the contributors table" -- README.md
+          git push

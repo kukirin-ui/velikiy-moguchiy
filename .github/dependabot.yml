@@ -1,0 +1,83 @@
+# Weekly dependency updates, one grouped PR per ecosystem and directory.
+# Patch and minor updates merge themselves once every required check is green
+# (.github/workflows/dependabot-automerge.yml); major updates wait for a person.
+#
+# Not covered on purpose:
+#   - ios/: KeyboardKit is pinned to 9.9.1, the last MIT release (10.0+ is closed);
+#   - mac/vendor/: copies of third-party code, updated by hand together with upstream;
+#   - lipread/**/pod/requirements.txt: pinned to what the GPU pod images were tested with.
+
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: /mac
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      rust-minor:
+        update-types: [minor, patch]
+      rust-major:
+        update-types: [major]
+    commit-message:
+      prefix: "deps(rust)"
+
+  - package-ecosystem: uv
+    directory: /lipread
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # The pins come from MultiVSR's tested requirements and CI cannot run the model,
+    # so only patch releases (and security fixes) come in on their own.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      lipread-patch:
+        update-types: [patch]
+    commit-message:
+      prefix: "deps(lipread)"
+
+  - package-ecosystem: pip
+    directory: /federated
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      federated-minor:
+        update-types: [minor, patch]
+      federated-major:
+        update-types: [major]
+    commit-message:
+      prefix: "deps(federated)"
+
+  - package-ecosystem: swift
+    directories:
+      - /mac/Packages/MLXBridge
+      - /mac/tools/llmbatch
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      swift-minor:
+        update-types: [minor, patch]
+      swift-major:
+        update-types: [major]
+    commit-message:
+      prefix: "deps(swift)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"

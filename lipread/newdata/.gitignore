@@ -1,0 +1,8 @@
+.venv/
+work/
+__pycache__/
+state.db*
+*.log
+STOP
+STOPPED_BOT
+weights/

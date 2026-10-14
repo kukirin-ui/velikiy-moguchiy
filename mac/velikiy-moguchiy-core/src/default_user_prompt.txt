@@ -1,0 +1,8 @@
+Пользовательский словарь:
+{{dictionary_entries}}
+
+История промежуточных версий ASR:
+{{interim_history}}
+
+Сырой текст ASR:
+{{asr_text}}

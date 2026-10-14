@@ -1,0 +1,118 @@
+name: Tests
+
+# Cheap Linux checks on every push and pull request. Each product's job runs only
+# when its files (or this workflow) changed. The Apple builds are in
+# build-apple.yml and run on demand, because macOS minutes are scarce.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect changed products
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      federated: ${{ steps.filter.outputs.federated }}
+      lipread: ${{ steps.filter.outputs.lipread }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - "mac/Cargo.toml"
+              - "mac/Cargo.lock"
+              - "mac/velikiy-moguchiy-*/**"
+              - ".github/workflows/tests.yml"
+            federated:
+              - "federated/**"
+              - "tools/mem_guard.py"
+              - ".github/workflows/tests.yml"
+            lipread:
+              - "lipread/**"
+              - "tools/mem_guard.py"
+              - ".github/workflows/tests.yml"
+
+  rust:
+    name: Rust core (Linux)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install libopus
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libopus-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mac
+      - name: Test
+        run: cargo test --workspace --no-default-features --features velikiy-moguchiy-core/wetype-offline
+
+  federated:
+    name: Federated (pytest)
+    needs: changes
+    if: needs.changes.outputs.federated == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: federated
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: python -m pip install numpy safetensors cryptography pydantic fastapi uvicorn python-multipart httpx pytest
+      - name: Test
+        # test_convert needs the lipread environment with torch and skips itself;
+        # the pmset/ioreg probe skips itself off macOS.
+        run: python -m pytest
+
+  lipread:
+    name: Lip reading (offline tests)
+    needs: changes
+    if: needs.changes.outputs.lipread == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lipread
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: python -m pip install numpy==2.2.6 pytest
+      - name: Test
+        # Only tests that need no clips, weights, camera or private files.
+        # harvester/test_harvest.py, tests/test_extdata.py and the six
+        # deselected tests import harvester/harvest.py, which loads a RunPod
+        # helper that is not in the repository. The other tests/*.py are
+        # scripts that need clips, weights or a camera.
+        run: |
+          python -m pytest -p no:cacheprovider harvester/test_pilot_train.py harvester/test_course_loop.py \
+            --deselect harvester/test_course_loop.py::ChannelQuality::test_pull_dump_reads_rv_state_db \
+            --deselect harvester/test_course_loop.py::Feeder::test_follow_rereads_skip_list \
+            --deselect harvester/test_course_loop.py::Feeder::test_queue_labels_are_handles_not_sections \
+            --deselect harvester/test_course_loop.py::Feeder::test_skip_list_and_label_sample \
+            --deselect harvester/test_course_loop.py::Supervisor::test_hold_restarts_nothing \
+            --deselect harvester/test_course_loop.py::Supervisor::test_stop_collection
+          python tests/test_dataset_split.py
+          python metrics.py
+          python -m pytest -p no:cacheprovider tests/test_train_on_me.py

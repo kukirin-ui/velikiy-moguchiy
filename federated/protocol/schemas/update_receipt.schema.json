@@ -1,0 +1,39 @@
+{
+ "properties": {
+  "status": {
+   "enum": [
+    "accepted",
+    "duplicate"
+   ],
+   "title": "Status",
+   "type": "string"
+  },
+  "update_id": {
+   "title": "Update Id",
+   "type": "string"
+  },
+  "base_version": {
+   "title": "Base Version",
+   "type": "integer"
+  },
+  "update_norm": {
+   "description": "L2-норма принятой дельты (по всем тензорам)",
+   "title": "Update Norm",
+   "type": "number"
+  },
+  "pending_in_round": {
+   "description": "сколько обновлений ждут агрегации на эту базовую версию",
+   "title": "Pending In Round",
+   "type": "integer"
+  }
+ },
+ "required": [
+  "status",
+  "update_id",
+  "base_version",
+  "update_norm",
+  "pending_in_round"
+ ],
+ "title": "UpdateReceipt",
+ "type": "object"
+}

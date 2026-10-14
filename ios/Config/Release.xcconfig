@@ -1,0 +1,13 @@
+// Release builds contain no API key. The DashScope key is typed by the user in
+// the app and stored in the Keychain. Your own team, bundle identifiers and
+// App Group go into Secrets.xcconfig (git-ignored), which overrides these.
+DEVELOPMENT_TEAM =
+VELIKIY_MOGUCHIY_APP_BUNDLE_IDENTIFIER = com.example.velikiy-moguchiy
+VELIKIY_MOGUCHIY_KEYBOARD_RU_BUNDLE_IDENTIFIER = com.example.velikiy-moguchiy.keyboard.ru
+VELIKIY_MOGUCHIY_KEYBOARD_EN_BUNDLE_IDENTIFIER = com.example.velikiy-moguchiy.keyboard.en
+VELIKIY_MOGUCHIY_KEYBOARD_KK_RU_BUNDLE_IDENTIFIER = com.example.velikiy-moguchiy.keyboard.kk.ru
+VELIKIY_MOGUCHIY_KEYBOARD_KK_EN_BUNDLE_IDENTIFIER = com.example.velikiy-moguchiy.keyboard.kk.en
+VELIKIY_MOGUCHIY_WIDGET_BUNDLE_IDENTIFIER = com.example.velikiy-moguchiy.widgets
+VELIKIY_MOGUCHIY_APP_GROUP_IDENTIFIER = group.com.example.velikiy-moguchiy
+
+#include? "Secrets.xcconfig"

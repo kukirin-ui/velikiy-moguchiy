@@ -1,0 +1,46 @@
+name: Text review
+
+# A language model reads the added lines of changed documents and reports drafts, internal notes,
+# placeholders, personal data, AI attribution and outdated statements: annotations on the diff and
+# one PR comment. High severity fails the check. The model sits behind any OpenAI-compatible chat
+# completions API set by the repository variables TEXT_REVIEW_ENDPOINT and TEXT_REVIEW_MODEL and the
+# secret TEXT_REVIEW_TOKEN (setup in docs/AUTOMATION.md). Without them, or when the API is down or
+# rate limited, the job says so and passes. Prompt and allowlist: tools/text_review/. The hard rules
+# (privacy_guard.py) run in privacy.yml either way.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: text-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: Text review
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Review tests
+        run: python3 -m pip install -q pytest && python3 -m pytest -q -p no:cacheprovider tools/test_text_review.py
+      - name: Review changed texts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEXT_REVIEW_ENDPOINT: ${{ vars.TEXT_REVIEW_ENDPOINT }}
+          TEXT_REVIEW_MODEL: ${{ vars.TEXT_REVIEW_MODEL }}
+          TEXT_REVIEW_TOKEN: ${{ secrets.TEXT_REVIEW_TOKEN }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 tools/text_review.py --base "$BASE" --head "$HEAD" --comment

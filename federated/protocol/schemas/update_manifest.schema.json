@@ -1,0 +1,76 @@
+{
+ "additionalProperties": false,
+ "properties": {
+  "schema_version": {
+   "const": 2,
+   "default": 2,
+   "title": "Schema Version",
+   "type": "integer"
+  },
+  "client_id": {
+   "description": "псевдоним установки = SHA-256(public_key)[:16] в hex",
+   "pattern": "^[0-9a-f]{32}$",
+   "title": "Client Id",
+   "type": "string"
+  },
+  "public_key": {
+   "description": "Ed25519, 32 байта в base64",
+   "maxLength": 44,
+   "minLength": 44,
+   "title": "Public Key",
+   "type": "string"
+  },
+  "base_version": {
+   "description": "версия глобального адаптера, от которой посчитана дельта",
+   "minimum": 1,
+   "title": "Base Version",
+   "type": "integer"
+  },
+  "spec_id": {
+   "maxLength": 64,
+   "minLength": 1,
+   "title": "Spec Id",
+   "type": "string"
+  },
+  "spec_hash": {
+   "pattern": "^[0-9a-f]{64}$",
+   "title": "Spec Hash",
+   "type": "string"
+  },
+  "num_examples": {
+   "description": "сколько клипов участвовало в локальном обучении",
+   "maximum": 1000000,
+   "minimum": 1,
+   "title": "Num Examples",
+   "type": "integer"
+  },
+  "payload_sha256": {
+   "pattern": "^[0-9a-f]{64}$",
+   "title": "Payload Sha256",
+   "type": "string"
+  },
+  "payload_bytes": {
+   "minimum": 1,
+   "title": "Payload Bytes",
+   "type": "integer"
+  },
+  "payload_dtype": {
+   "const": "float16",
+   "default": "float16",
+   "title": "Payload Dtype",
+   "type": "string"
+  }
+ },
+ "required": [
+  "client_id",
+  "public_key",
+  "base_version",
+  "spec_id",
+  "spec_hash",
+  "num_examples",
+  "payload_sha256",
+  "payload_bytes"
+ ],
+ "title": "UpdateManifest",
+ "type": "object"
+}

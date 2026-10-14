@@ -1,0 +1,40 @@
+name: Предложение
+description: Новая возможность или улучшение
+title: "[Предложение] "
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: product
+    attributes:
+      label: Часть проекта
+      options:
+        - Диктовка для macOS (mac/)
+        - Клавиатура для iPhone (ios/)
+        - Чтение по губам (lipread/)
+        - Общее обучение (federated/)
+        - Сборка, CI, документация
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую задачу это решает
+      description: Опишите ситуацию, в которой вам этого не хватает
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Что предлагаете
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Какие варианты рассматривали
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Приватность
+      options:
+        - label: Предложение не требует отправлять звук, видео или тексты туда, куда пользователь не соглашался

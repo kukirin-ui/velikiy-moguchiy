@@ -1,0 +1,28 @@
+name: Data governance
+
+# Validates the channel exclusions log (data-governance/exclusions/channels.tsv).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data-governance/**"
+      - ".github/workflows/data-governance.yml"
+  pull_request:
+    paths:
+      - "data-governance/**"
+      - ".github/workflows/data-governance.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  exclusions:
+    name: Exclusions log
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests
+        run: python3 data-governance/exclusions/test_exclusions.py
+      - name: Check the log
+        run: python3 data-governance/exclusions/exclusions.py --check

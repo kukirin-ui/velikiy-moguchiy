@@ -1,0 +1,8 @@
+{
+ "probe_conf_min": 2.5,
+ "seg_conf_min": 3.0,
+ "off_center": -1,
+ "off_tol": 3,
+ "video_pass_frac": 0.3,
+ "video_delta": 1.5
+}

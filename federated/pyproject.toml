@@ -1,0 +1,27 @@
+[project]
+name = "velikiy-moguchiy-federated"
+version = "0.1.0"
+description = "Федеративное дообучение LoRA-адаптера «Великого & Могучего» (чтение по губам): протокол, сервер, клиент, симуляция"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "safetensors>=0.4",
+    "cryptography>=42",
+    "pydantic>=2.6",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+# torch нужен только клиентскому тренеру и симуляции (сервер и протокол работают на numpy)
+sim = ["torch>=2.2"]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

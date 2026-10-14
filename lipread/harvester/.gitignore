@@ -1,0 +1,13 @@
+OPERATOR.lock
+# цикл корректировки сбора: пересобирается каждые несколько минут или на каждый запуск
+channel_quality.json
+clip_stats_cache.json
+clip_stats_cache.tmp
+channel_quality.tmp
+stage.json
+stage.lock
+stage.tmp
+STAGE_HOLD
+stages/
+autosubs/
+train-stage*.log

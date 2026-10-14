@@ -1,0 +1,62 @@
+[workspace]
+members = ["velikiy-moguchiy-asr", "velikiy-moguchiy-core", "velikiy-moguchiy-cli"]
+resolver = "2"
+
+# macOS 26+/Darwin 27 fix: the release proc-macro dylibs (codegen-units=16,
+# no debuginfo) come out with a "mis-aligned LINKEDIT string pool" that dyld
+# refuses to dlopen, breaking `cargo build --release`. Building the host-side
+# proc-macros/build-scripts like the dev profile (many codegen units + debuginfo)
+# yields valid dylibs. This does NOT change the optimization of the final
+# release binaries — only how the compile-time macros are built.
+[profile.release.build-override]
+debug = 2
+codegen-units = 256
+[profile.bench.build-override]
+debug = 2
+codegen-units = 256
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+repository = "https://github.com/zigansh1n/velikiy-moguchiy"
+rust-version = "1.85"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[workspace.dependencies]
+# shared
+async-trait = "0.1"
+futures-util = "0.3"
+log = "0.4"
+reqwest = { version = "0.12", default-features = false }
+serde = "1.0"
+serde_json = "1.0"
+tokio = "1.50"
+uuid = "1.23"
+
+# velikiy-moguchiy-asr
+audiopus = "0.3.0-rc.0"
+base64 = "0.22"
+flate2 = "1.1"
+md-5 = "0.10"
+rustls = { version = "0.23", default-features = false }
+sherpa-onnx = "1.12"
+tokio-tungstenite = "0.24"
+# Same parser reqwest uses internally; endpoint validation must judge the
+# URL exactly as it will be fetched.
+url = "2.5"
+
+# velikiy-moguchiy-core
+cbindgen = "0.27"
+env_logger = "0.11"
+serde_yaml = "0.9"
+sha2 = "0.10"
+tokio-util = "0.7"
+urlencoding = "2.1"
+
+# velikiy-moguchiy-cli
+clap = "4.6"
+indicatif = "0.17"

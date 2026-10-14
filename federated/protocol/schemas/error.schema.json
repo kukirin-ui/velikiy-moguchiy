@@ -1,0 +1,30 @@
+{
+ "properties": {
+  "error": {
+   "title": "Error",
+   "type": "string"
+  },
+  "message": {
+   "default": "",
+   "title": "Message",
+   "type": "string"
+  },
+  "latest_version": {
+   "anyOf": [
+    {
+     "type": "integer"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Latest Version"
+  }
+ },
+ "required": [
+  "error"
+ ],
+ "title": "ErrorBody",
+ "type": "object"
+}

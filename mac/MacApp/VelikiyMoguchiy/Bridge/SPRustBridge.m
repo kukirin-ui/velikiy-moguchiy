@@ -1,0 +1,430 @@
+#import "SPRustBridge.h"
+#import <AppKit/AppKit.h>
+#import "velikiy_moguchiy_core.h"
+
+// ─── Static delegate reference for C callbacks ─────────────────────
+
+static __weak id<SPRustBridgeDelegate> _bridgeDelegate = nil;
+
+/// Monotonic token that tracks the current session.
+/// Callbacks carrying a stale token are discarded on the main thread.
+static uint64_t _currentSessionToken = 0;
+
+/// Set from the sp_core_session_begin result of the current session.
+static BOOL _currentSessionTypesText = NO;
+static NSString *_currentSessionBundleId = nil;
+
+static void bridge_on_session_ready(uint64_t token) {
+    id<SPRustBridgeDelegate> delegate = _bridgeDelegate;
+    if (delegate) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (token != _currentSessionToken) return;
+            [delegate rustBridgeDidBecomeReady];
+        });
+    }
+}
+
+static void bridge_on_session_error(uint64_t token, const char *message) {
+    NSString *msg = message ? [NSString stringWithUTF8String:message] : @"unknown error";
+    id<SPRustBridgeDelegate> delegate = _bridgeDelegate;
+    if (delegate) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (token != _currentSessionToken) return;
+            [delegate rustBridgeDidEncounterError:msg];
+        });
+    }
+}
+
+static void bridge_on_session_warning(uint64_t token, const char *message) {
+    NSString *msg = message ? [NSString stringWithUTF8String:message] : @"unknown warning";
+    id<SPRustBridgeDelegate> delegate = _bridgeDelegate;
+    if (delegate) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (token != _currentSessionToken) return;
+            [delegate rustBridgeDidReceiveWarning:msg];
+        });
+    }
+}
+
+static void bridge_on_final_text_ready(uint64_t token, const char *text) {
+    NSString *txt = text ? [NSString stringWithUTF8String:text] : @"";
+    id<SPRustBridgeDelegate> delegate = _bridgeDelegate;
+    if (delegate) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (token != _currentSessionToken) return;
+            [delegate rustBridgeDidReceiveFinalText:txt];
+        });
+    }
+}
+
+static void bridge_on_text_delivery(uint64_t token, uint8_t kind, const char *remainder) {
+    NSString *rest = remainder ? [NSString stringWithUTF8String:remainder] : @"";
+    id<SPRustBridgeDelegate> delegate = _bridgeDelegate;
+    if (delegate) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (token != _currentSessionToken) return;
+            [delegate rustBridgeDidReceiveTextDeliveryKind:(NSInteger)kind remainder:rest];
+        });
+    }
+}
+
+static void bridge_on_log_event(int level, const char *message) {
+    NSString *msg = message ? [NSString stringWithUTF8String:message] : @"";
+    NSString *levelStr;
+    switch (level) {
+        case 0: levelStr = @"ERROR"; break;
+        case 1: levelStr = @"WARN"; break;
+        case 2: levelStr = @"INFO"; break;
+        default: levelStr = @"DEBUG"; break;
+    }
+    NSLog(@"[VelikiyMoguchiy/Rust][%@] %@", levelStr, msg);
+}
+
+static void bridge_on_state_changed(uint64_t token, const char *state) {
+    NSString *stateStr = state ? [NSString stringWithUTF8String:state] : @"unknown";
+    id<SPRustBridgeDelegate> delegate = _bridgeDelegate;
+    if (delegate) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (token != _currentSessionToken) return;
+            [delegate rustBridgeDidChangeState:stateStr];
+        });
+    }
+}
+
+static void bridge_on_interim_text(uint64_t token, const char *text) {
+    NSString *txt = text ? [NSString stringWithUTF8String:text] : @"";
+    id<SPRustBridgeDelegate> delegate = _bridgeDelegate;
+    if (delegate) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (token != _currentSessionToken) return;
+            [delegate rustBridgeDidReceiveInterimText:txt];
+        });
+    }
+}
+
+static void bridge_on_asr_final_text(uint64_t token, const char *text) {
+    NSString *txt = text ? [NSString stringWithUTF8String:text] : @"";
+    id<SPRustBridgeDelegate> delegate = _bridgeDelegate;
+    if (delegate) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (token != _currentSessionToken) return;
+            [delegate rustBridgeDidReceiveAsrFinalText:txt];
+        });
+    }
+}
+
+static void bridge_on_session_result_meta(uint64_t token, const char *asrText,
+                                          const char *asrProvider, bool llmApplied) {
+    NSString *asr = asrText ? [NSString stringWithUTF8String:asrText] : @"";
+    NSString *provider = asrProvider ? [NSString stringWithUTF8String:asrProvider] : @"";
+    id<SPRustBridgeDelegate> delegate = _bridgeDelegate;
+    if (delegate) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (token != _currentSessionToken) return;
+            [delegate rustBridgeDidReceiveSessionMetaWithAsrText:asr
+                                                        provider:provider
+                                                      llmApplied:llmApplied ? YES : NO];
+        });
+    }
+}
+
+static void bridge_on_rewrite_text_ready(uint64_t token, const char *text) {
+    NSString *txt = text ? [NSString stringWithUTF8String:text] : @"";
+    id<SPRustBridgeDelegate> delegate = _bridgeDelegate;
+    if (delegate) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (token != _currentSessionToken) return;
+            [delegate rustBridgeDidReceiveRewriteText:txt];
+        });
+    }
+}
+
+// ─── Download callback context ─────────────────────────────────────
+
+@interface _SPDownloadContext : NSObject
+@property (copy) void (^progressBlock)(NSUInteger, NSUInteger, uint64_t, uint64_t, NSString *);
+@property (copy) void (^completionBlock)(BOOL, NSString *);
+@end
+@implementation _SPDownloadContext
+@end
+
+// ─── SPRustBridge Implementation ────────────────────────────────────
+
+@interface SPRustBridge ()
+@property (nonatomic, weak) id<SPRustBridgeDelegate> delegate;
+@end
+
+@implementation SPRustBridge
+
+- (uint64_t)currentSessionToken {
+    return _currentSessionToken;
+}
+
+- (NSString *)currentSessionBundleId {
+    return _currentSessionBundleId;
+}
+
+- (BOOL)currentSessionTypesText {
+    return _currentSessionTypesText;
+}
+
+- (instancetype)initWithDelegate:(id<SPRustBridgeDelegate>)delegate {
+    self = [super init];
+    if (self) {
+        _delegate = delegate;
+        _bridgeDelegate = delegate;
+    }
+    return self;
+}
+
+- (void)initializeCore {
+    // Register callbacks
+    struct SPCallbacks callbacks = {
+        .on_session_ready = bridge_on_session_ready,
+        .on_session_error = bridge_on_session_error,
+        .on_session_warning = bridge_on_session_warning,
+        .on_final_text_ready = bridge_on_final_text_ready,
+        .on_log_event = bridge_on_log_event,
+        .on_state_changed = bridge_on_state_changed,
+        .on_interim_text = bridge_on_interim_text,
+        .on_asr_final_text = bridge_on_asr_final_text,
+        .on_rewrite_text_ready = bridge_on_rewrite_text_ready,
+        .on_session_result_meta = bridge_on_session_result_meta,
+        .on_text_delivery = bridge_on_text_delivery,
+    };
+    sp_core_register_callbacks(callbacks);
+
+    // Initialize core (config path unused in Phase 1)
+    int32_t result = sp_core_create(NULL);
+    if (result != 0) {
+        NSLog(@"[VelikiyMoguchiy] sp_core_create failed: %d", result);
+    }
+}
+
+- (void)destroyCore {
+    sp_core_destroy();
+}
+
+- (BOOL)beginSessionWithMode:(SPSessionModeObjC)mode {
+    NSRunningApplication *frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
+    const char *bundleId = frontApp.bundleIdentifier.UTF8String;
+    _currentSessionBundleId = [frontApp.bundleIdentifier copy];
+    pid_t pid = frontApp.processIdentifier;
+
+    _currentSessionToken++;
+    _currentSessionTypesText = NO;
+
+    struct SPSessionContext context = {
+        .mode = (enum SPSessionMode)mode,
+        .frontmost_bundle_id = bundleId,
+        .frontmost_pid = (int)pid,
+        .session_token = _currentSessionToken,
+    };
+
+    // -1 = failed, 0 = started, 1 = started and the session types its own text.
+    int32_t result = sp_core_session_begin(context);
+    if (result < 0) {
+        NSLog(@"[VelikiyMoguchiy] sp_core_session_begin failed: %d", result);
+        return NO;
+    }
+    _currentSessionTypesText = (result == 1);
+    return YES;
+}
+
+- (void)pushAudioFrame:(const void *)buffer length:(uint32_t)length timestamp:(uint64_t)timestamp {
+    sp_core_push_audio((const uint8_t *)buffer, length, timestamp);
+}
+
+- (void)endSession {
+    sp_core_session_end();
+}
+
+- (void)cancelSession {
+    sp_core_session_cancel();
+}
+
+- (void)discardSessionCallbacks {
+    _currentSessionToken++;
+}
+
+- (BOOL)acceptAsrResult {
+    return sp_core_accept_asr_result() == 0;
+}
+
+- (void)reloadConfig {
+    sp_core_reload_config();
+}
+
+// ─── Model Management ──────────────────────────────────────────────
+
+- (NSArray<NSString *> *)supportedLocalProviders {
+    char *json = sp_core_supported_local_providers();
+    if (!json) return @[];
+    NSString *jsonStr = [NSString stringWithUTF8String:json];
+    sp_core_free_string(json);
+    NSData *data = [jsonStr dataUsingEncoding:NSUTF8StringEncoding];
+    if (!data) return @[];
+    NSArray *result = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    return [result isKindOfClass:[NSArray class]] ? result : @[];
+}
+
+- (NSArray<NSString *> *)supportedLlmProviders {
+    char *json = sp_core_supported_llm_providers();
+    if (!json) return @[];
+    NSString *jsonStr = [NSString stringWithUTF8String:json];
+    sp_core_free_string(json);
+    NSData *data = [jsonStr dataUsingEncoding:NSUTF8StringEncoding];
+    if (!data) return @[];
+    NSArray *result = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    return [result isKindOfClass:[NSArray class]] ? result : @[];
+}
+
+- (NSDictionary *)llmRemoteModelsForProfile:(NSDictionary *)profile {
+    NSData *profileData = [NSJSONSerialization dataWithJSONObject:profile ?: @{}
+                                                          options:0
+                                                            error:nil];
+    NSString *profileJson = profileData
+                                ? [[NSString alloc] initWithData:profileData
+                                                       encoding:NSUTF8StringEncoding]
+                                : nil;
+    char *json = sp_llm_list_models_for_profile_json((profileJson ?: @"{}").UTF8String);
+    if (!json) {
+        return @{
+            @"success": @NO,
+            @"models": @[],
+            @"message": @"No response from core",
+        };
+    }
+
+    NSString *jsonStr = [NSString stringWithUTF8String:json] ?: @"";
+    sp_core_free_string(json);
+
+    NSData *data = [jsonStr dataUsingEncoding:NSUTF8StringEncoding];
+    if (!data) {
+        return @{
+            @"success": @NO,
+            @"models": @[],
+            @"message": @"Invalid model list response encoding",
+        };
+    }
+
+    NSDictionary *result = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if (![result isKindOfClass:[NSDictionary class]]) {
+        return @{
+            @"success": @NO,
+            @"models": @[],
+            @"message": @"Invalid model list response payload",
+        };
+    }
+    return result;
+}
+
+- (NSArray<NSDictionary *> *)scanModels {
+    char *json = sp_core_scan_models_json();
+    if (!json) return @[];
+
+    NSString *jsonStr = [NSString stringWithUTF8String:json];
+    sp_core_free_string(json);
+
+    NSData *data = [jsonStr dataUsingEncoding:NSUTF8StringEncoding];
+    if (!data) return @[];
+
+    NSError *error = nil;
+    NSArray *result = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+    if (error || ![result isKindOfClass:[NSArray class]]) return @[];
+
+    return result;
+}
+
+- (NSInteger)modelStatus:(NSString *)modelPath mode:(SPModelVerifyMode)mode {
+    return sp_model_status(modelPath.UTF8String, (int32_t)mode);
+}
+
+static void download_progress_cb(void *ctx, uint32_t file_index, uint32_t file_count,
+                                  uint64_t downloaded, uint64_t total, const char *filename) {
+    _SPDownloadContext *dctx = (__bridge _SPDownloadContext *)ctx;
+    void (^block)(NSUInteger, NSUInteger, uint64_t, uint64_t, NSString *) = dctx.progressBlock;
+    if (!block) return;
+    NSString *name = filename ? [NSString stringWithUTF8String:filename] : @"";
+    dispatch_async(dispatch_get_main_queue(), ^{
+        block(file_index, file_count, downloaded, total, name);
+    });
+}
+
+static void download_status_cb(void *ctx, int32_t status, const char *message) {
+    // status 0 = started — download still in progress
+    if (status == 0) return;
+
+    // Cleanup must happen on main queue (FIFO with progress dispatches)
+    // to avoid racing with in-flight progress callbacks.
+    NSString *msg = message ? [NSString stringWithUTF8String:message] : @"";
+    BOOL success = (status == 1);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        _SPDownloadContext *dctx = (__bridge_transfer _SPDownloadContext *)ctx;
+        void (^completionBlock)(BOOL, NSString *) = dctx.completionBlock;
+        dctx.progressBlock = nil;
+        dctx.completionBlock = nil;
+        if (completionBlock) completionBlock(success, msg);
+    });
+}
+
+- (void)downloadModel:(NSString *)modelPath
+             progress:(void (^)(NSUInteger, NSUInteger, uint64_t, uint64_t, NSString *))progressBlock
+           completion:(void (^)(BOOL, NSString *))completionBlock {
+    _SPDownloadContext *dctx = [[_SPDownloadContext alloc] init];
+    dctx.progressBlock = progressBlock;
+    dctx.completionBlock = completionBlock;
+
+    // Retain for C callback lifetime — transferred back in download_status_cb
+    void *ctx = (__bridge_retained void *)dctx;
+
+    int32_t result = sp_core_download_model(
+        modelPath.UTF8String,
+        download_progress_cb,
+        download_status_cb,
+        ctx
+    );
+
+    if (result != 0) {
+        // Transfer back so ARC releases
+        (void)(__bridge_transfer _SPDownloadContext *)ctx;
+        NSString *msg = (result == -1) ? @"Already downloading" : @"Failed to start download";
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completionBlock(NO, msg);
+        });
+    }
+}
+
+- (void)cancelDownload:(NSString *)modelPath {
+    sp_core_cancel_download(modelPath.UTF8String);
+}
+
+- (NSInteger)removeModelFiles:(NSString *)modelPath {
+    return sp_core_remove_model_files(modelPath.UTF8String);
+}
+
+// ─── Rewrite / Prompt Templates ───────────────────────────────────
+
+- (NSArray<NSDictionary *> *)promptTemplates {
+    char *json = sp_core_get_prompt_templates_json();
+    if (!json) return @[];
+    NSString *jsonStr = [NSString stringWithUTF8String:json];
+    sp_core_free_string(json);
+    NSData *data = [jsonStr dataUsingEncoding:NSUTF8StringEncoding];
+    if (!data) return @[];
+    NSArray *arr = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    return arr ?: @[];
+}
+
+- (BOOL)setPromptTemplates:(NSArray<NSDictionary *> *)templates {
+    NSData *data = [NSJSONSerialization dataWithJSONObject:templates options:0 error:nil];
+    if (!data) return NO;
+    NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    return sp_core_set_prompt_templates_json(json.UTF8String) == 0;
+}
+
+- (BOOL)rewriteWithTemplateIndex:(NSInteger)index asrText:(NSString *)text {
+    return sp_core_rewrite_with_template((int32_t)index, text.UTF8String) == 0;
+}
+
+@end

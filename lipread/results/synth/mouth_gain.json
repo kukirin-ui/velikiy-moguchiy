@@ -1,0 +1,29 @@
+{
+ "1.0": {
+  "conf": 6.14,
+  "null": 1.71,
+  "passed": 1.0,
+  "lip_gap_mean": 2.43,
+  "lip_gap_p90_p10": 2.56,
+  "mouth_width_std": 0.92,
+  "offset_median": -2.0
+ },
+ "1.6": {
+  "conf": 6.25,
+  "null": 1.73,
+  "passed": 1.0,
+  "lip_gap_mean": 3.93,
+  "lip_gap_p90_p10": 5.31,
+  "mouth_width_std": 1.4,
+  "offset_median": -2.0
+ },
+ "2.2": {
+  "conf": 5.75,
+  "null": 1.66,
+  "passed": 1.0,
+  "lip_gap_mean": 5.69,
+  "lip_gap_p90_p10": 7.3,
+  "mouth_width_std": 1.84,
+  "offset_median": -2.0
+ }
+}

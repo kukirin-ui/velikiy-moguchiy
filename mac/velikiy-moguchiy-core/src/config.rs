@@ -1,0 +1,3738 @@
+use crate::errors::{CoreError, Result};
+use crate::snippets::Snippet;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+/// Root configuration structure matching ~/.velikiy-moguchiy/config.yaml
+#[derive(Debug, Deserialize, Clone)]
+pub struct Config {
+    #[serde(default)]
+    pub asr: AsrSection,
+    #[serde(default)]
+    pub llm: LlmSection,
+    #[serde(default)]
+    pub feedback: FeedbackSection,
+    #[serde(default)]
+    pub dictionary: DictionarySection,
+    #[serde(default)]
+    pub clipboard: ClipboardSection,
+    #[serde(default)]
+    pub hotkey: HotkeySection,
+    #[serde(default)]
+    pub overlay: OverlaySection,
+    #[serde(default)]
+    pub commands: CommandsSection,
+    #[serde(default)]
+    pub snippets: Vec<Snippet>,
+    #[serde(default)]
+    pub recording: RecordingSection,
+    #[serde(default = "default_prompt_templates")]
+    pub prompt_templates: Vec<PromptTemplate>,
+}
+
+/// Spoken formatting commands in dictation ("новая строка", "отправь", ...).
+#[derive(Debug, Deserialize, Clone)]
+pub struct CommandsSection {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl Default for CommandsSection {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct RecordingSection {
+    /// Hands-free (toggle / auto-tap) recordings end after this many seconds of
+    /// silence that follow speech; 0 turns it off. Never applies to hold.
+    #[serde(default)]
+    pub auto_stop_silence_s: f64,
+}
+
+impl Default for RecordingSection {
+    fn default() -> Self {
+        Self {
+            auto_stop_silence_s: 0.0,
+        }
+    }
+}
+
+impl RecordingSection {
+    /// The silence timeout in seconds, 0 when off. Anything outside 1..=60 s is
+    /// treated as off rather than guessed at.
+    pub fn silence_timeout_s(&self) -> f32 {
+        let s = self.auto_stop_silence_s;
+        if s.is_finite() && (1.0..=60.0).contains(&s) {
+            s as f32
+        } else {
+            0.0
+        }
+    }
+}
+
+/// A named prompt template selectable from the overlay UI.
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct PromptTemplate {
+    /// Display name shown on the overlay button
+    pub name: String,
+    /// Whether this template should be shown in the overlay selector
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Shortcut key number (1-9)
+    pub shortcut: u8,
+    /// Inline system prompt text (mutually exclusive with system_prompt_path)
+    #[serde(default)]
+    pub system_prompt: Option<String>,
+    /// Path to system prompt file, relative to ~/.velikiy-moguchiy/ (alternative to inline)
+    #[serde(default)]
+    pub system_prompt_path: Option<String>,
+}
+
+// ─── ASR V2 Configuration ───────────────────────────────────────────
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct AsrSection {
+    /// Which ASR provider to use: "qwen" (default), "doubao", "glm", "mimo", "mlx", "sherpa-onnx", "apple-speech"
+    #[serde(
+        default = "default_asr_provider",
+        deserialize_with = "deserialize_asr_provider"
+    )]
+    pub provider: String,
+
+    /// Doubao (豆包/火山引擎) ASR configuration
+    #[serde(default)]
+    pub doubao: DoubaoAsrConfig,
+
+    /// Qwen ASR configuration
+    #[serde(default)]
+    pub qwen: QwenAsrConfig,
+
+    /// MLX local ASR configuration (Apple Silicon only)
+    #[serde(default)]
+    pub mlx: MlxAsrConfig,
+
+    /// Sherpa-ONNX local ASR configuration (CPU)
+    #[serde(rename = "sherpa-onnx", default)]
+    pub sherpa_onnx: SherpaOnnxAsrConfig,
+
+    /// Apple Speech local ASR configuration (macOS 26+)
+    #[serde(rename = "apple-speech", default)]
+    pub apple_speech: AppleSpeechAsrConfig,
+
+    /// GLM (Zhipu) ASR configuration
+    #[serde(default)]
+    pub glm: GlmAsrConfig,
+
+    /// MiMo (Xiaomi) ASR configuration
+    #[serde(default)]
+    pub mimo: MimoAsrConfig,
+
+    /// WeType (微信输入法) offline local ASR configuration (embed_140m)
+    #[serde(default)]
+    pub wetype: WeTypeAsrConfig,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct WeTypeAsrConfig {
+    /// Model directory name under ~/.velikiy-moguchiy/models/ (holds embed140m.koepack + dict.decoder.utf8.txt)
+    #[serde(default = "default_wetype_model")]
+    pub model: String,
+}
+
+impl Default for WeTypeAsrConfig {
+    fn default() -> Self {
+        Self {
+            model: default_wetype_model(),
+        }
+    }
+}
+
+fn default_wetype_model() -> String {
+    "wetype/embed140m".into()
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct QwenAsrConfig {
+    #[serde(default = "default_qwen_url")]
+    pub url: String,
+    #[serde(default)]
+    pub api_key: String,
+    /// Interchangeable DashScope keys tried in turn when one is rejected or out of
+    /// quota. Empty means just `api_key`.
+    #[serde(default)]
+    pub api_keys: Vec<String>,
+    #[serde(default = "default_qwen_model")]
+    pub model: String,
+    #[serde(default = "default_qwen_language")]
+    pub language: String,
+    #[serde(default = "default_connect_timeout")]
+    pub connect_timeout_ms: u64,
+    #[serde(default = "default_final_wait_timeout")]
+    pub final_wait_timeout_ms: u64,
+    /// Custom HTTP headers for WebSocket connection
+    #[serde(default)]
+    pub headers: std::collections::HashMap<String, String>,
+    /// Omni models only: raw | light | structured | formal
+    #[serde(default = "default_qwen_output_mode")]
+    pub output_mode: String,
+    /// Omni models only: target language name for the translate hotkey, in Russian
+    #[serde(default = "default_qwen_translate_to")]
+    pub translate_to: String,
+    /// Omni models only: bundle id (or prefix) -> output mode, overriding the
+    /// built-in per-app defaults
+    #[serde(default)]
+    pub app_modes: std::collections::HashMap<String, String>,
+    /// Omni models only: give the model the window title and the text before the caret
+    #[serde(default = "default_true")]
+    pub use_field_context: bool,
+}
+
+impl QwenAsrConfig {
+    /// `api_keys` when set, else the single `api_key`; blanks dropped.
+    pub fn effective_api_keys(&self) -> Vec<String> {
+        let keys: Vec<String> = self
+            .api_keys
+            .iter()
+            .map(|k| k.trim().to_string())
+            .filter(|k| !k.is_empty())
+            .collect();
+        if keys.is_empty() && !self.api_key.trim().is_empty() {
+            vec![self.api_key.trim().to_string()]
+        } else {
+            keys
+        }
+    }
+}
+
+fn default_qwen_output_mode() -> String {
+    "raw".into()
+}
+
+fn default_qwen_translate_to() -> String {
+    "английский".into()
+}
+
+impl Default for QwenAsrConfig {
+    fn default() -> Self {
+        Self {
+            url: default_qwen_url(),
+            api_key: String::new(),
+            api_keys: Vec::new(),
+            model: default_qwen_model(),
+            language: default_qwen_language(),
+            connect_timeout_ms: default_connect_timeout(),
+            final_wait_timeout_ms: default_final_wait_timeout(),
+            headers: std::collections::HashMap::new(),
+            output_mode: default_qwen_output_mode(),
+            translate_to: default_qwen_translate_to(),
+            app_modes: std::collections::HashMap::new(),
+            use_field_context: true,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct DoubaoAsrConfig {
+    #[serde(default = "default_asr_url")]
+    pub url: String,
+    /// X-Api-Key for new console auth (takes precedence over app_key + access_key)
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub app_key: String,
+    #[serde(default)]
+    pub access_key: String,
+    #[serde(default = "default_resource_id")]
+    pub resource_id: String,
+    #[serde(default = "default_connect_timeout")]
+    pub connect_timeout_ms: u64,
+    #[serde(default = "default_final_wait_timeout")]
+    pub final_wait_timeout_ms: u64,
+    #[serde(default = "default_true")]
+    pub enable_ddc: bool,
+    #[serde(default = "default_true")]
+    pub enable_itn: bool,
+    #[serde(default = "default_true")]
+    pub enable_punc: bool,
+    #[serde(default = "default_true")]
+    pub enable_nonstream: bool,
+    /// Language code (e.g. "zh-CN", "en-US", "ja-JP"). Empty = auto (中英文 + 方言)
+    #[serde(default)]
+    pub language: Option<String>,
+    /// Forced endpoint time in ms (min 200, server default 800)
+    #[serde(default, deserialize_with = "deserialize_option_u32_lenient")]
+    pub end_window_size: Option<u32>,
+    /// Audio must exceed this duration (ms) before endpoint detection kicks in
+    #[serde(default, deserialize_with = "deserialize_option_u32_lenient")]
+    pub force_to_speech_time: Option<u32>,
+    /// Max silence for semantic segmentation (ms, default 3000)
+    #[serde(default, deserialize_with = "deserialize_option_u32_lenient")]
+    pub vad_segment_duration: Option<u32>,
+    /// Output traditional Chinese: "traditional", "tw", or "hk"
+    #[serde(default, deserialize_with = "deserialize_option_string_lenient")]
+    pub output_zh_variant: Option<String>,
+    /// Enable first-character return acceleration
+    #[serde(default)]
+    pub enable_accelerate_text: bool,
+    /// Acceleration score (0-20, higher = faster first char)
+    #[serde(default, deserialize_with = "deserialize_option_u32_lenient")]
+    pub accelerate_score: Option<u32>,
+    /// Custom HTTP headers for WebSocket connection
+    #[serde(default)]
+    pub headers: std::collections::HashMap<String, String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct MlxAsrConfig {
+    /// Model directory name under ~/.velikiy-moguchiy/models/mlx/
+    #[serde(default = "default_mlx_model")]
+    pub model: String,
+    /// Delay preset: "realtime", "agent", "subtitle"
+    #[serde(default = "default_mlx_delay_preset")]
+    pub delay_preset: String,
+    /// Language: "auto", "zh", "en"
+    #[serde(default = "default_mlx_language")]
+    pub language: String,
+}
+
+impl Default for MlxAsrConfig {
+    fn default() -> Self {
+        Self {
+            model: default_mlx_model(),
+            delay_preset: default_mlx_delay_preset(),
+            language: default_mlx_language(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct SherpaOnnxAsrConfig {
+    /// Model directory name under ~/.velikiy-moguchiy/models/sherpa-onnx/
+    #[serde(default = "default_sherpa_onnx_model")]
+    pub model: String,
+    /// Number of threads for inference (default: 2)
+    #[serde(default = "default_sherpa_onnx_num_threads")]
+    pub num_threads: i32,
+    /// Hotwords score boost (default: 1.5)
+    #[serde(default = "default_sherpa_onnx_hotwords_score")]
+    pub hotwords_score: f32,
+    /// Trailing silence for endpoint detection in seconds (default: 1.2)
+    #[serde(default = "default_sherpa_onnx_endpoint_silence")]
+    pub endpoint_silence: f32,
+}
+
+impl Default for SherpaOnnxAsrConfig {
+    fn default() -> Self {
+        Self {
+            model: default_sherpa_onnx_model(),
+            num_threads: default_sherpa_onnx_num_threads(),
+            hotwords_score: default_sherpa_onnx_hotwords_score(),
+            endpoint_silence: default_sherpa_onnx_endpoint_silence(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct AppleSpeechAsrConfig {
+    /// Locale identifier (e.g. "zh_CN", "en_US")
+    #[serde(default = "default_apple_speech_locale")]
+    pub locale: String,
+}
+
+impl Default for AppleSpeechAsrConfig {
+    fn default() -> Self {
+        Self {
+            locale: default_apple_speech_locale(),
+        }
+    }
+}
+
+fn default_apple_speech_locale() -> String {
+    "zh_CN".to_string()
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct GlmAsrConfig {
+    #[serde(default = "default_glm_url")]
+    pub url: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default = "default_glm_model")]
+    pub model: String,
+    /// ASR hint / prompt for guiding recognition
+    #[serde(default)]
+    pub prompt: Option<String>,
+    #[serde(default = "default_connect_timeout")]
+    pub connect_timeout_ms: u64,
+    #[serde(default = "default_final_wait_timeout")]
+    pub final_wait_timeout_ms: u64,
+}
+
+impl Default for GlmAsrConfig {
+    fn default() -> Self {
+        Self {
+            url: default_glm_url(),
+            api_key: String::new(),
+            model: default_glm_model(),
+            prompt: None,
+            connect_timeout_ms: default_connect_timeout(),
+            final_wait_timeout_ms: default_final_wait_timeout(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct MimoAsrConfig {
+    #[serde(default = "default_mimo_url")]
+    pub url: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default = "default_mimo_model")]
+    pub model: String,
+    /// Language code: "auto" (default), "zh-CN", "en-US", etc.
+    #[serde(default = "default_mimo_language")]
+    pub language: String,
+    #[serde(default = "default_connect_timeout")]
+    pub connect_timeout_ms: u64,
+    #[serde(default = "default_final_wait_timeout")]
+    pub final_wait_timeout_ms: u64,
+}
+
+impl Default for MimoAsrConfig {
+    fn default() -> Self {
+        Self {
+            url: default_mimo_url(),
+            api_key: String::new(),
+            model: default_mimo_model(),
+            language: default_mimo_language(),
+            connect_timeout_ms: default_connect_timeout(),
+            final_wait_timeout_ms: default_final_wait_timeout(),
+        }
+    }
+}
+
+// ─── Other Sections (unchanged) ─────────────────────────────────────
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct LlmSection {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_false")]
+    pub prompt_templates_enabled: bool,
+    #[serde(default = "default_true")]
+    pub auto_paste_processed_text: bool,
+    /// Active LLM profile id.
+    #[serde(default = "default_llm_active_profile")]
+    pub active_profile: String,
+    /// Saved LLM profiles keyed by stable profile id.
+    #[serde(default = "default_llm_profiles")]
+    pub profiles: BTreeMap<String, LlmProfileConfig>,
+    #[serde(default)]
+    pub temperature: f64,
+    #[serde(default = "default_top_p")]
+    pub top_p: f64,
+    #[serde(default = "default_llm_timeout")]
+    pub timeout_ms: u64,
+    #[serde(default = "default_max_output_tokens")]
+    pub max_output_tokens: u32,
+    #[serde(default = "default_dictionary_max_candidates")]
+    pub dictionary_max_candidates: usize,
+    #[serde(default = "default_system_prompt_path")]
+    pub system_prompt_path: String,
+    #[serde(default = "default_user_prompt_path")]
+    pub user_prompt_path: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct LlmProfilesPayload {
+    pub active_profile: String,
+    pub profiles: BTreeMap<String, LlmProfileConfig>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmApiProtocol {
+    #[default]
+    OpenaiChat,
+    OpenaiResponses,
+    AnthropicMessages,
+}
+
+impl LlmApiProtocol {
+    pub fn default_endpoint_path(self) -> &'static str {
+        match self {
+            Self::OpenaiChat => "/chat/completions",
+            Self::OpenaiResponses => "/responses",
+            Self::AnthropicMessages => "/messages",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct LlmProfileConfig {
+    #[serde(default)]
+    pub name: String,
+    /// LLM provider: "openai", "anthropic", "apfel", or "mlx". "apfel" is
+    /// tracked separately so the UI can show Apple Foundation Models defaults.
+    #[serde(default = "default_llm_provider")]
+    pub provider: String,
+    /// Wire protocol used by this remote profile. Existing profiles without
+    /// this field continue to use OpenAI Chat Completions.
+    #[serde(default)]
+    pub api_protocol: LlmApiProtocol,
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub model: String,
+    /// Relative API path appended to `base_url`. The legacy
+    /// `chat_completions_path` key is accepted for migration.
+    #[serde(default, alias = "chat_completions_path")]
+    pub endpoint_path: String,
+    #[serde(default = "default_llm_max_token_parameter")]
+    pub max_token_parameter: LlmMaxTokenParameter,
+    #[serde(default)]
+    pub no_reasoning_control: LlmNoReasoningControl,
+    /// MLX local LLM configuration (Apple Silicon only).
+    #[serde(default)]
+    pub mlx: MlxLlmConfig,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct LlmProfileRuntimeConfig {
+    pub id: String,
+    pub name: String,
+    pub provider: String,
+    #[serde(default)]
+    pub api_protocol: LlmApiProtocol,
+    pub base_url: String,
+    pub api_key: String,
+    pub model: String,
+    #[serde(default, alias = "chat_completions_path")]
+    pub endpoint_path: String,
+    pub max_token_parameter: LlmMaxTokenParameter,
+    pub no_reasoning_control: LlmNoReasoningControl,
+    pub mlx: MlxLlmConfig,
+}
+
+impl LlmSection {
+    pub fn active_profile_config(&self) -> Result<LlmProfileRuntimeConfig> {
+        let profile = self.profiles.get(&self.active_profile).ok_or_else(|| {
+            CoreError::Config(format!("LLM profile not found: {}", self.active_profile))
+        })?;
+        Ok(profile.to_runtime_config(&self.active_profile))
+    }
+
+    pub fn profiles_payload(&self) -> LlmProfilesPayload {
+        LlmProfilesPayload {
+            active_profile: self.active_profile.clone(),
+            profiles: self.profiles.clone(),
+        }
+    }
+}
+
+impl LlmProfileConfig {
+    pub fn to_runtime_config(&self, id: &str) -> LlmProfileRuntimeConfig {
+        LlmProfileRuntimeConfig {
+            id: id.to_string(),
+            name: if self.name.is_empty() {
+                id.to_string()
+            } else {
+                self.name.clone()
+            },
+            provider: self.provider.clone(),
+            api_protocol: self.api_protocol,
+            base_url: self.base_url.clone(),
+            api_key: self.api_key.clone(),
+            model: self.model.clone(),
+            endpoint_path: self.endpoint_path.clone(),
+            max_token_parameter: self.max_token_parameter,
+            no_reasoning_control: self.no_reasoning_control,
+            mlx: self.mlx.clone(),
+        }
+    }
+}
+
+impl LlmProfileRuntimeConfig {
+    pub fn effective_api_protocol(&self) -> LlmApiProtocol {
+        match self.provider.as_str() {
+            "anthropic" => LlmApiProtocol::AnthropicMessages,
+            "apfel" => LlmApiProtocol::OpenaiChat,
+            _ => self.api_protocol,
+        }
+    }
+
+    pub fn effective_endpoint_path(&self) -> &str {
+        let configured = self.endpoint_path.trim();
+        if configured.is_empty() {
+            self.effective_api_protocol().default_endpoint_path()
+        } else {
+            configured
+        }
+    }
+
+    pub fn is_ready(&self) -> bool {
+        match self.provider.as_str() {
+            "mlx" => !self.mlx.model.is_empty(),
+            _ => !self.base_url.is_empty() && !self.model.is_empty(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MlxLlmConfig {
+    /// Model directory name under ~/.velikiy-moguchiy/models/
+    #[serde(default = "default_mlx_llm_model")]
+    pub model: String,
+}
+
+impl Default for MlxLlmConfig {
+    fn default() -> Self {
+        Self {
+            model: default_mlx_llm_model(),
+        }
+    }
+}
+
+impl Default for LlmProfileConfig {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            provider: default_llm_provider(),
+            api_protocol: LlmApiProtocol::default(),
+            base_url: String::new(),
+            api_key: String::new(),
+            model: String::new(),
+            endpoint_path: String::new(),
+            max_token_parameter: default_llm_max_token_parameter(),
+            no_reasoning_control: LlmNoReasoningControl::default(),
+            mlx: MlxLlmConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmMaxTokenParameter {
+    MaxTokens,
+    MaxCompletionTokens,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmNoReasoningControl {
+    #[default]
+    ReasoningEffort,
+    Thinking,
+    /// DashScope's hybrid Qwen models: `enable_thinking: false`.
+    EnableThinking,
+    None,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct FeedbackSection {
+    #[serde(default)]
+    pub start_sound: bool,
+    #[serde(default)]
+    pub stop_sound: bool,
+    #[serde(default)]
+    pub error_sound: bool,
+    /// Mute system audio output for the duration of a recording (opt-in, default off).
+    #[serde(default)]
+    pub mute_system_output: bool,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct DictionarySection {
+    #[serde(default = "default_dictionary_path")]
+    pub path: String,
+}
+
+// ─── Clipboard Configuration ────────────────────────────────────────
+
+pub const DEFAULT_CLIPBOARD_RESTORE_DELAY_MS: u32 = 1500;
+pub const MAX_CLIPBOARD_RESTORE_DELAY_MS: u32 = 60_000;
+
+/// Clipboard behavior for automatic paste.
+#[derive(Debug, Clone)]
+pub struct ClipboardSection {
+    /// How long to wait after the automatic-paste completion callback before
+    /// restoring the pre-session clipboard contents, in milliseconds.
+    /// Valid range 0..=60000. 0 schedules restoration immediately after the
+    /// paste completion callback; it does not disable restoration.
+    pub restore_delay_ms: u32,
+}
+
+impl Default for ClipboardSection {
+    fn default() -> Self {
+        Self {
+            restore_delay_ms: DEFAULT_CLIPBOARD_RESTORE_DELAY_MS,
+        }
+    }
+}
+
+/// Tolerant deserialization: an invalid `clipboard` section or
+/// `restore_delay_ms` value falls back to the default with a warning instead
+/// of failing the whole config load, so a clipboard typo cannot poison
+/// unrelated ASR/LLM/hotkey settings. The warning never includes clipboard
+/// contents — only the key name and the accepted range. Custom visitors are
+/// required (rather than deserializing into `serde_yaml::Value`) because
+/// serde_yaml hard-errors on integers wider than u64 unless the visitor
+/// accepts i128/u128.
+impl<'de> Deserialize<'de> for ClipboardSection {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct SectionVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for SectionVisitor {
+            type Value = ClipboardSection;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a clipboard config mapping")
+            }
+
+            // `clipboard:` with no value.
+            fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
+                Ok(ClipboardSection::default())
+            }
+
+            fn visit_none<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
+                Ok(ClipboardSection::default())
+            }
+
+            fn visit_map<A>(self, mut map: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut section = ClipboardSection::default();
+                while let Some(key) = map.next_key::<String>()? {
+                    if key == "restore_delay_ms" {
+                        section.restore_delay_ms = map.next_value::<TolerantRestoreDelay>()?.0;
+                    } else {
+                        map.next_value::<serde::de::IgnoredAny>()?;
+                    }
+                }
+                Ok(section)
+            }
+
+            fn visit_bool<E: serde::de::Error>(
+                self,
+                _: bool,
+            ) -> std::result::Result<Self::Value, E> {
+                Ok(warn_clipboard_section_not_mapping())
+            }
+
+            fn visit_i64<E: serde::de::Error>(self, _: i64) -> std::result::Result<Self::Value, E> {
+                Ok(warn_clipboard_section_not_mapping())
+            }
+
+            fn visit_u64<E: serde::de::Error>(self, _: u64) -> std::result::Result<Self::Value, E> {
+                Ok(warn_clipboard_section_not_mapping())
+            }
+
+            fn visit_i128<E: serde::de::Error>(
+                self,
+                _: i128,
+            ) -> std::result::Result<Self::Value, E> {
+                Ok(warn_clipboard_section_not_mapping())
+            }
+
+            fn visit_u128<E: serde::de::Error>(
+                self,
+                _: u128,
+            ) -> std::result::Result<Self::Value, E> {
+                Ok(warn_clipboard_section_not_mapping())
+            }
+
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> std::result::Result<Self::Value, E> {
+                Ok(warn_clipboard_section_not_mapping())
+            }
+
+            fn visit_str<E: serde::de::Error>(
+                self,
+                _: &str,
+            ) -> std::result::Result<Self::Value, E> {
+                Ok(warn_clipboard_section_not_mapping())
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                while seq.next_element::<serde::de::IgnoredAny>()?.is_some() {}
+                Ok(warn_clipboard_section_not_mapping())
+            }
+        }
+
+        deserializer.deserialize_any(SectionVisitor)
+    }
+}
+
+fn warn_clipboard_section_not_mapping() -> ClipboardSection {
+    log::warn!("config: `clipboard` section is not a mapping; using defaults");
+    ClipboardSection::default()
+}
+
+/// A `restore_delay_ms` value that never fails deserialization: any
+/// non-integer or out-of-range value becomes the default with a warning.
+struct TolerantRestoreDelay(u32);
+
+fn validate_restore_delay(value: Option<u64>) -> u32 {
+    match value {
+        Some(v) if v <= MAX_CLIPBOARD_RESTORE_DELAY_MS as u64 => v as u32,
+        _ => {
+            log::warn!(
+                "config: `clipboard.restore_delay_ms` must be an integer between 0 and \
+                 {MAX_CLIPBOARD_RESTORE_DELAY_MS}; falling back to \
+                 {DEFAULT_CLIPBOARD_RESTORE_DELAY_MS}"
+            );
+            DEFAULT_CLIPBOARD_RESTORE_DELAY_MS
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for TolerantRestoreDelay {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct DelayVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for DelayVisitor {
+            type Value = TolerantRestoreDelay;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("an integer between 0 and 60000")
+            }
+
+            fn visit_u64<E: serde::de::Error>(self, v: u64) -> std::result::Result<Self::Value, E> {
+                Ok(TolerantRestoreDelay(validate_restore_delay(Some(v))))
+            }
+
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> std::result::Result<Self::Value, E> {
+                Ok(TolerantRestoreDelay(validate_restore_delay(
+                    u64::try_from(v).ok(),
+                )))
+            }
+
+            fn visit_u128<E: serde::de::Error>(
+                self,
+                v: u128,
+            ) -> std::result::Result<Self::Value, E> {
+                Ok(TolerantRestoreDelay(validate_restore_delay(
+                    u64::try_from(v).ok(),
+                )))
+            }
+
+            fn visit_i128<E: serde::de::Error>(
+                self,
+                v: i128,
+            ) -> std::result::Result<Self::Value, E> {
+                Ok(TolerantRestoreDelay(validate_restore_delay(
+                    u64::try_from(v).ok(),
+                )))
+            }
+
+            fn visit_f64<E: serde::de::Error>(self, _: f64) -> std::result::Result<Self::Value, E> {
+                Ok(TolerantRestoreDelay(validate_restore_delay(None)))
+            }
+
+            fn visit_bool<E: serde::de::Error>(
+                self,
+                _: bool,
+            ) -> std::result::Result<Self::Value, E> {
+                Ok(TolerantRestoreDelay(validate_restore_delay(None)))
+            }
+
+            fn visit_str<E: serde::de::Error>(
+                self,
+                _: &str,
+            ) -> std::result::Result<Self::Value, E> {
+                Ok(TolerantRestoreDelay(validate_restore_delay(None)))
+            }
+
+            // A missing value (`restore_delay_ms:` with nothing after it) is
+            // treated like an absent field, not an invalid one — no warning.
+            fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
+                Ok(TolerantRestoreDelay(DEFAULT_CLIPBOARD_RESTORE_DELAY_MS))
+            }
+
+            fn visit_none<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
+                Ok(TolerantRestoreDelay(DEFAULT_CLIPBOARD_RESTORE_DELAY_MS))
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                while seq.next_element::<serde::de::IgnoredAny>()?.is_some() {}
+                Ok(TolerantRestoreDelay(validate_restore_delay(None)))
+            }
+
+            fn visit_map<A>(self, mut map: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                while map
+                    .next_entry::<serde::de::IgnoredAny, serde::de::IgnoredAny>()?
+                    .is_some()
+                {}
+                Ok(TolerantRestoreDelay(validate_restore_delay(None)))
+            }
+        }
+
+        deserializer.deserialize_any(DelayVisitor)
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct OverlaySection {
+    #[serde(default = "default_overlay_font_family")]
+    pub font_family: String,
+    #[serde(default = "default_overlay_font_size")]
+    pub font_size: u16,
+    #[serde(default = "default_overlay_bottom_margin")]
+    pub bottom_margin: u16,
+    #[serde(default = "default_overlay_limit_visible_lines")]
+    pub limit_visible_lines: bool,
+    #[serde(default = "default_overlay_max_visible_lines")]
+    pub max_visible_lines: u16,
+}
+
+/// Deserialize a YAML value that can be either a string ("fn") or an integer (96)
+/// into a String. This is needed because YAML `trigger_key: 96` is parsed as an
+/// integer, not a string, and serde_yaml won't auto-convert int → String.
+fn deserialize_string_or_int<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct StringOrInt;
+    impl<'de> serde::de::Visitor<'de> for StringOrInt {
+        type Value = String;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string or integer")
+        }
+        fn visit_str<E: serde::de::Error>(self, v: &str) -> std::result::Result<String, E> {
+            Ok(v.to_string())
+        }
+        fn visit_i64<E: serde::de::Error>(self, v: i64) -> std::result::Result<String, E> {
+            Ok(v.to_string())
+        }
+        fn visit_u64<E: serde::de::Error>(self, v: u64) -> std::result::Result<String, E> {
+            Ok(v.to_string())
+        }
+    }
+    deserializer.deserialize_any(StringOrInt)
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct HotkeySection {
+    /// Trigger key for voice input.
+    /// Options: "fn", "left_option", "right_option", "left_command", "right_command", "left_control", "right_control"
+    /// Or a raw keycode number (e.g. 122 for F1) for non-modifier keys.
+    /// Default: "fn"
+    #[serde(
+        default = "default_trigger_key",
+        deserialize_with = "deserialize_string_or_int"
+    )]
+    pub trigger_key: String,
+
+    /// Legacy field kept only so older configs still deserialize cleanly.
+    /// Runtime no longer exposes or resolves a separate cancel hotkey.
+    #[serde(default, deserialize_with = "deserialize_string_or_int")]
+    pub cancel_key: String,
+
+    /// Trigger mode: "hold" (press-and-hold, default), "toggle" (tap to
+    /// start/stop), "double_tap" (double-tap to start, single-tap to stop), or "auto"
+    /// (short tap toggles, holding past 350 ms records until release).
+    #[serde(default = "default_trigger_mode")]
+    pub trigger_mode: String,
+
+    /// Second trigger: speech is translated (`asr.qwen.translate_to`). Same key
+    /// syntax as `trigger_key`; empty disables it.
+    #[serde(default, deserialize_with = "deserialize_string_or_int")]
+    pub translate_key: String,
+
+    /// Third trigger: a spoken question about the selected text, answered in the
+    /// overlay and copied to the clipboard. Empty disables it.
+    #[serde(default, deserialize_with = "deserialize_string_or_int")]
+    pub ask_key: String,
+
+    /// Cancels an active dictation session (nothing is pasted). "escape" (the
+    /// default), another key name / raw keycode as for `trigger_key`, or empty
+    /// to disable.
+    #[serde(
+        default = "default_abort_key",
+        deserialize_with = "deserialize_string_or_int"
+    )]
+    pub abort_key: String,
+
+    /// Fourth trigger: each press cycles `asr.qwen.output_mode` raw → light →
+    /// structured → formal → raw. Same key syntax as `translate_key`; empty
+    /// disables it.
+    #[serde(default, deserialize_with = "deserialize_string_or_int")]
+    pub mode_key: String,
+
+    /// Voice edit of the selection: the spoken instruction rewrites the selected
+    /// text in place. Same key syntax as `translate_key`; empty disables it.
+    #[serde(default, deserialize_with = "deserialize_string_or_int")]
+    pub edit_key: String,
+
+    /// Takes back the last inserted text (within two minutes, same field).
+    /// Same key syntax as `translate_key`; empty disables it.
+    #[serde(default, deserialize_with = "deserialize_string_or_int")]
+    pub undo_key: String,
+
+    /// Pastes the last dictation again at the cursor. Same key syntax as
+    /// `translate_key`; empty disables it.
+    #[serde(default, deserialize_with = "deserialize_string_or_int")]
+    pub repaste_key: String,
+
+    /// Experimental lip reading (`experimental.lips`): the camera records while
+    /// this key is held and the clip is read by the local lip-reading service.
+    /// Same key syntax as `translate_key`; empty disables it.
+    #[serde(default, deserialize_with = "deserialize_string_or_int")]
+    pub lips_key: String,
+
+    /// Mouse button used like the trigger key: 3 = middle, 4 / 5 = the side
+    /// buttons (back / forward). 0 or empty disables it; anything else is
+    /// ignored with a warning.
+    #[serde(default, deserialize_with = "deserialize_string_or_int")]
+    pub mouse_button: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HotkeyMatchKind {
+    ModifierOnly = 0,
+    KeyDown = 1,
+}
+
+/// Resolved hotkey parameters for the native side
+#[derive(Debug, Clone, Copy)]
+pub struct HotkeyParams {
+    /// Primary key code (from Carbon Events)
+    pub key_code: u16,
+    /// Alternative key code (e.g. 179 for Globe key), 0 if none
+    pub alt_key_code: u16,
+    /// Modifier flag to check. For modifier-only hotkeys this is the key-state
+    /// flag to observe on flagsChanged. For keyDown hotkeys this is the exact
+    /// generic modifier mask required alongside the main key code.
+    pub modifier_flag: u64,
+    /// Whether this hotkey is modifier-only or should be matched on keyDown/up.
+    pub match_kind: HotkeyMatchKind,
+}
+
+impl HotkeyParams {
+    /// Whether both describe the same physical key / combination.
+    pub fn same_key(&self, other: &HotkeyParams) -> bool {
+        self.key_code == other.key_code
+            && self.modifier_flag == other.modifier_flag
+            && self.match_kind == other.match_kind
+    }
+}
+
+impl HotkeySection {
+    /// Resolve the configured trigger hotkey into concrete key codes and
+    /// modifier flags for the native side.
+    pub fn resolve(&self) -> HotkeyParams {
+        Self::resolve_key(&self.normalized_trigger_key())
+    }
+
+    /// Resolve an extra hotkey value (`translate_key`, `ask_key`, `abort_key`).
+    /// None when unset *or not a recognized key*: a typo must disable the hotkey
+    /// rather than silently becoming Fn.
+    pub fn resolve_extra(key: &str) -> Option<HotkeyParams> {
+        let name = Self::parse_key_strict(key)?;
+        Some(Self::resolve_key(&name))
+    }
+
+    /// Resolve `abort_key`; None when disabled. "escape"/"esc" map to keycode 53.
+    pub fn resolve_abort(key: &str) -> Option<HotkeyParams> {
+        match key.trim().to_ascii_lowercase().as_str() {
+            "escape" | "esc" => Some(HotkeyParams {
+                key_code: 53,
+                alt_key_code: 0,
+                modifier_flag: 0,
+                match_kind: HotkeyMatchKind::KeyDown,
+            }),
+            _ => Self::resolve_extra(key),
+        }
+    }
+
+    /// `translate_key`, or None when unset, malformed, or equal to the trigger.
+    pub fn resolve_translate(&self) -> Option<HotkeyParams> {
+        Self::resolve_distinct(
+            "translate_key",
+            Self::resolve_extra(&self.translate_key),
+            &self.translate_key,
+            &[("trigger_key", self.resolve())],
+        )
+    }
+
+    /// `ask_key`, or None when unset, malformed, or equal to the trigger or
+    /// the (valid) translate key.
+    pub fn resolve_ask(&self) -> Option<HotkeyParams> {
+        let mut taken = vec![("trigger_key", self.resolve())];
+        if let Some(translate) = self.resolve_translate() {
+            taken.push(("translate_key", translate));
+        }
+        Self::resolve_distinct(
+            "ask_key",
+            Self::resolve_extra(&self.ask_key),
+            &self.ask_key,
+            &taken,
+        )
+    }
+
+    /// `mode_key`, or None when unset, malformed, or equal to the trigger, the
+    /// translate or ask key, or the (valid) abort key.
+    pub fn resolve_mode_key(&self) -> Option<HotkeyParams> {
+        let mut taken = vec![("trigger_key", self.resolve())];
+        if let Some(translate) = self.resolve_translate() {
+            taken.push(("translate_key", translate));
+        }
+        if let Some(ask) = self.resolve_ask() {
+            taken.push(("ask_key", ask));
+        }
+        if let Some(abort) = self.resolve_abort_key() {
+            taken.push(("abort_key", abort));
+        }
+        Self::resolve_distinct(
+            "mode_key",
+            Self::resolve_extra(&self.mode_key),
+            &self.mode_key,
+            &taken,
+        )
+    }
+
+    /// The keys every later hotkey must differ from: trigger, translate, ask,
+    /// abort and mode (each only when it is itself valid).
+    fn core_keys(&self) -> Vec<(&'static str, HotkeyParams)> {
+        let mut taken = vec![("trigger_key", self.resolve())];
+        if let Some(translate) = self.resolve_translate() {
+            taken.push(("translate_key", translate));
+        }
+        if let Some(ask) = self.resolve_ask() {
+            taken.push(("ask_key", ask));
+        }
+        if let Some(abort) = self.resolve_abort_key() {
+            taken.push(("abort_key", abort));
+        }
+        if let Some(mode) = self.resolve_mode_key() {
+            taken.push(("mode_key", mode));
+        }
+        taken
+    }
+
+    /// `edit_key`, or None when unset, malformed, or equal to any key above.
+    pub fn resolve_edit_key(&self) -> Option<HotkeyParams> {
+        Self::resolve_distinct(
+            "edit_key",
+            Self::resolve_extra(&self.edit_key),
+            &self.edit_key,
+            &self.core_keys(),
+        )
+    }
+
+    /// `undo_key`, or None when unset, malformed, or equal to an earlier key
+    /// (including the edit key).
+    pub fn resolve_undo_key(&self) -> Option<HotkeyParams> {
+        let mut taken = self.core_keys();
+        if let Some(edit) = self.resolve_edit_key() {
+            taken.push(("edit_key", edit));
+        }
+        Self::resolve_distinct(
+            "undo_key",
+            Self::resolve_extra(&self.undo_key),
+            &self.undo_key,
+            &taken,
+        )
+    }
+
+    /// `repaste_key`, or None when unset, malformed, or equal to an earlier key
+    /// (including the edit and undo keys).
+    pub fn resolve_repaste_key(&self) -> Option<HotkeyParams> {
+        let mut taken = self.core_keys();
+        if let Some(edit) = self.resolve_edit_key() {
+            taken.push(("edit_key", edit));
+        }
+        if let Some(undo) = self.resolve_undo_key() {
+            taken.push(("undo_key", undo));
+        }
+        Self::resolve_distinct(
+            "repaste_key",
+            Self::resolve_extra(&self.repaste_key),
+            &self.repaste_key,
+            &taken,
+        )
+    }
+
+    /// `lips_key`, or None when unset, malformed, or equal to an earlier key
+    /// (including the edit, undo and re-paste keys).
+    pub fn resolve_lips_key(&self) -> Option<HotkeyParams> {
+        let mut taken = self.core_keys();
+        if let Some(edit) = self.resolve_edit_key() {
+            taken.push(("edit_key", edit));
+        }
+        if let Some(undo) = self.resolve_undo_key() {
+            taken.push(("undo_key", undo));
+        }
+        if let Some(repaste) = self.resolve_repaste_key() {
+            taken.push(("repaste_key", repaste));
+        }
+        Self::resolve_distinct(
+            "lips_key",
+            Self::resolve_extra(&self.lips_key),
+            &self.lips_key,
+            &taken,
+        )
+    }
+
+    /// `mouse_button` as 3 (middle), 4 or 5 (side buttons); 0 when off or invalid.
+    pub fn resolve_mouse_button(&self) -> u8 {
+        let raw = self.mouse_button.trim().to_ascii_lowercase();
+        match raw.as_str() {
+            "" | "0" | "off" => 0,
+            "3" | "middle" => 3,
+            "4" | "back" => 4,
+            "5" | "forward" => 5,
+            _ => {
+                log::warn!(
+                    "hotkey.mouse_button: unrecognized value {:?} (use 0, 3, 4 or 5); the mouse button is disabled",
+                    self.mouse_button
+                );
+                0
+            }
+        }
+    }
+
+    /// `abort_key`, or None when disabled, malformed, or equal to the trigger.
+    pub fn resolve_abort_key(&self) -> Option<HotkeyParams> {
+        Self::resolve_distinct(
+            "abort_key",
+            Self::resolve_abort(&self.abort_key),
+            &self.abort_key,
+            &[("trigger_key", self.resolve())],
+        )
+    }
+
+    fn resolve_distinct(
+        label: &str,
+        resolved: Option<HotkeyParams>,
+        raw: &str,
+        taken: &[(&str, HotkeyParams)],
+    ) -> Option<HotkeyParams> {
+        if raw.trim().is_empty() {
+            return None;
+        }
+        let Some(params) = resolved else {
+            log::warn!("hotkey.{label}: unrecognized value {raw:?}; this hotkey is disabled");
+            return None;
+        };
+        if let Some((other, _)) = taken.iter().find(|(_, p)| p.same_key(&params)) {
+            log::warn!("hotkey.{label} ({raw:?}) is the same key as hotkey.{other}; this hotkey is disabled");
+            return None;
+        }
+        Some(params)
+    }
+
+    /// The canonical name of a recognized key, None for anything else
+    /// (unlike `normalize_trigger_key_name`, which falls back to Fn).
+    fn parse_key_strict(value: &str) -> Option<String> {
+        let lower = value.trim().to_ascii_lowercase();
+        if lower.is_empty() {
+            return None;
+        }
+        match lower.as_str() {
+            "left_option" | "right_option" | "left_command" | "right_command" | "left_control"
+            | "right_control" | "fn" => Some(lower),
+            _ if Self::is_plain_number(&lower) => {
+                Self::parse_raw_keycode(&lower).map(|code| code.to_string())
+            }
+            _ => Self::parse_hotkey_combo(&lower).map(|c| c.normalized_value),
+        }
+    }
+
+    pub fn normalized_trigger_key(&self) -> String {
+        Self::normalize_trigger_key_name(&self.trigger_key)
+    }
+
+    fn normalize_trigger_key_name(value: &str) -> String {
+        match value {
+            "left_option" | "right_option" | "left_command" | "right_command" | "left_control"
+            | "right_control" | "fn" => value.into(),
+            _ if Self::parse_raw_keycode(value).is_some() => {
+                Self::parse_raw_keycode(value).unwrap().to_string()
+            }
+            _ if Self::parse_hotkey_combo(value).is_some() => {
+                Self::parse_hotkey_combo(value).unwrap().normalized_value
+            }
+            _ => default_trigger_key(),
+        }
+    }
+
+    /// Digits only, or `0x` plus hex digits: no sign, no spaces.
+    fn is_plain_number(value: &str) -> bool {
+        match value.strip_prefix("0x") {
+            Some(hex) => !hex.is_empty() && hex.chars().all(|c| c.is_ascii_hexdigit()),
+            None => !value.is_empty() && value.chars().all(|c| c.is_ascii_digit()),
+        }
+    }
+
+    /// Try to parse a string as a raw keycode (u16).
+    /// Supports decimal (e.g. "122") and hex with 0x prefix (e.g. "0x7a").
+    fn parse_raw_keycode(value: &str) -> Option<u16> {
+        let trimmed = value.trim();
+        if let Some(hex) = trimmed
+            .strip_prefix("0x")
+            .or_else(|| trimmed.strip_prefix("0X"))
+        {
+            u16::from_str_radix(hex, 16).ok()
+        } else {
+            trimmed.parse::<u16>().ok()
+        }
+    }
+
+    fn parse_hotkey_combo(value: &str) -> Option<ParsedHotkeyCombo> {
+        if !value.contains('+') {
+            return None;
+        }
+
+        let mut key_code = None;
+        let mut modifier_mask = 0_u64;
+
+        for raw_token in value.split('+') {
+            let token = raw_token.trim().to_ascii_lowercase();
+            if token.is_empty() {
+                return None;
+            }
+
+            if let Some(flag) = Self::combo_modifier_flag(&token) {
+                modifier_mask |= flag;
+                continue;
+            }
+
+            if key_code.is_some() {
+                return None;
+            }
+            key_code = Self::parse_raw_keycode(&token);
+            if key_code.is_none() {
+                return None;
+            }
+        }
+
+        let key_code = key_code?;
+        if modifier_mask == 0 {
+            return None;
+        }
+
+        let mut parts: Vec<String> = Self::combo_modifier_tokens_from_mask(modifier_mask)
+            .into_iter()
+            .map(|token| token.to_string())
+            .collect();
+        parts.push(key_code.to_string());
+
+        Some(ParsedHotkeyCombo {
+            key_code,
+            modifier_mask,
+            normalized_value: parts.join("+"),
+        })
+    }
+
+    fn combo_modifier_flag(token: &str) -> Option<u64> {
+        match token {
+            "command" | "cmd" => Some(0x0010_0000),
+            "option" | "alt" => Some(0x0008_0000),
+            "control" | "ctrl" => Some(0x0004_0000),
+            "shift" => Some(0x0002_0000),
+            "fn" | "function" | "globe" => Some(0x0080_0000),
+            _ => None,
+        }
+    }
+
+    fn combo_modifier_tokens_from_mask(mask: u64) -> Vec<&'static str> {
+        let ordered = [
+            ("command", 0x0010_0000_u64),
+            ("option", 0x0008_0000_u64),
+            ("control", 0x0004_0000_u64),
+            ("shift", 0x0002_0000_u64),
+            ("fn", 0x0080_0000_u64),
+        ];
+
+        ordered
+            .into_iter()
+            .filter_map(|(token, flag)| ((mask & flag) != 0).then_some(token))
+            .collect()
+    }
+
+    fn resolve_key(key: &str) -> HotkeyParams {
+        match key {
+            "left_option" => HotkeyParams {
+                key_code: 58, // kVK_Option
+                alt_key_code: 0,
+                modifier_flag: 0x00000020, // NX_DEVICELALTKEYMASK
+                match_kind: HotkeyMatchKind::ModifierOnly,
+            },
+            "right_option" => HotkeyParams {
+                key_code: 61, // kVK_RightOption
+                alt_key_code: 0,
+                modifier_flag: 0x00000040, // NX_DEVICERALTKEYMASK
+                match_kind: HotkeyMatchKind::ModifierOnly,
+            },
+            "left_command" => HotkeyParams {
+                key_code: 55, // kVK_Command
+                alt_key_code: 0,
+                modifier_flag: 0x00000008, // NX_DEVICELCMDKEYMASK
+                match_kind: HotkeyMatchKind::ModifierOnly,
+            },
+            "right_command" => HotkeyParams {
+                key_code: 54, // kVK_RightCommand
+                alt_key_code: 0,
+                modifier_flag: 0x00000010, // NX_DEVICERCMDKEYMASK
+                match_kind: HotkeyMatchKind::ModifierOnly,
+            },
+            "left_control" => HotkeyParams {
+                key_code: 59, // kVK_Control
+                alt_key_code: 0,
+                modifier_flag: 0x00000001, // NX_DEVICELCTLKEYMASK
+                match_kind: HotkeyMatchKind::ModifierOnly,
+            },
+            "right_control" => HotkeyParams {
+                key_code: 62, // kVK_RightControl
+                alt_key_code: 0,
+                modifier_flag: 0x00002000, // NX_DEVICERCTLKEYMASK
+                match_kind: HotkeyMatchKind::ModifierOnly,
+            },
+            _ if Self::parse_hotkey_combo(key).is_some() => {
+                let combo = Self::parse_hotkey_combo(key).unwrap();
+                HotkeyParams {
+                    key_code: combo.key_code,
+                    alt_key_code: 0,
+                    modifier_flag: combo.modifier_mask,
+                    match_kind: HotkeyMatchKind::KeyDown,
+                }
+            }
+            // Raw keycode (non-modifier key, detected via keyDown/keyUp)
+            _ if Self::parse_raw_keycode(key).is_some() => {
+                let code = Self::parse_raw_keycode(key).unwrap();
+                HotkeyParams {
+                    key_code: code,
+                    alt_key_code: 0,
+                    modifier_flag: 0,
+                    match_kind: HotkeyMatchKind::KeyDown,
+                }
+            }
+            // "fn" or anything else defaults to Fn/Globe
+            _ => HotkeyParams {
+                key_code: 63,              // kVK_Function (Fn)
+                alt_key_code: 179,         // Globe key on newer keyboards
+                modifier_flag: 0x00800000, // NSEventModifierFlagFunction
+                match_kind: HotkeyMatchKind::ModifierOnly,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedHotkeyCombo {
+    key_code: u16,
+    modifier_mask: u64,
+    normalized_value: String,
+}
+
+// ─── Defaults ───────────────────────────────────────────────────────
+
+fn default_asr_provider() -> String {
+    "qwen".into()
+}
+/// The unofficial DoubaoIME client (it posed as ByteDance's Android input method)
+/// was removed. A config that still names it is read as the default provider,
+/// which needs the user's own key, so nothing is sent until one is entered.
+fn deserialize_asr_provider<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let name = String::deserialize(deserializer)?;
+    if name == "doubaoime" {
+        log::warn!(
+            "asr.provider \"doubaoime\" is no longer available; using \"{}\"",
+            default_asr_provider()
+        );
+        return Ok(default_asr_provider());
+    }
+    Ok(name)
+}
+fn default_qwen_url() -> String {
+    "wss://dashscope.aliyuncs.com/api-ws/v1/realtime".into()
+}
+fn default_qwen_model() -> String {
+    "qwen3.8-omni-flash-realtime".into()
+}
+fn default_qwen_language() -> String {
+    "zh".into()
+}
+fn default_mlx_model() -> String {
+    "mlx/Qwen3-ASR-0.6B-4bit".into()
+}
+fn default_mlx_delay_preset() -> String {
+    "realtime".into()
+}
+fn default_mlx_language() -> String {
+    "auto".into()
+}
+fn default_sherpa_onnx_model() -> String {
+    "sherpa-onnx/bilingual-zh-en".into()
+}
+fn default_sherpa_onnx_num_threads() -> i32 {
+    2
+}
+fn default_sherpa_onnx_hotwords_score() -> f32 {
+    1.5
+}
+fn default_sherpa_onnx_endpoint_silence() -> f32 {
+    1.2
+}
+fn default_glm_url() -> String {
+    "https://open.bigmodel.cn/api/paas/v4/audio/transcriptions".into()
+}
+fn default_glm_model() -> String {
+    "glm-asr-2512".into()
+}
+fn default_mimo_url() -> String {
+    "https://api.xiaomimimo.com/v1/chat/completions".into()
+}
+fn default_mimo_model() -> String {
+    "mimo-v2.5-asr".into()
+}
+fn default_mimo_language() -> String {
+    "auto".into()
+}
+fn deserialize_option_u32_lenient<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<u32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    let val = serde_yaml::Value::deserialize(deserializer)?;
+    match val {
+        serde_yaml::Value::Null => Ok(None),
+        serde_yaml::Value::Number(n) => Ok(n.as_u64().map(|v| v as u32)),
+        serde_yaml::Value::String(s) if s.trim().is_empty() => Ok(None),
+        serde_yaml::Value::String(s) => s
+            .trim()
+            .parse::<u32>()
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+        _ => Ok(None),
+    }
+}
+
+fn deserialize_option_string_lenient<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    let val = Option::<String>::deserialize(deserializer)?;
+    Ok(val.filter(|s| !s.trim().is_empty()))
+}
+
+fn default_asr_url() -> String {
+    "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async".into()
+}
+fn default_resource_id() -> String {
+    "volc.seedasr.sauc.duration".into()
+}
+fn default_connect_timeout() -> u64 {
+    3000
+}
+fn default_final_wait_timeout() -> u64 {
+    5000
+}
+fn default_true() -> bool {
+    true
+}
+fn default_false() -> bool {
+    false
+}
+fn default_top_p() -> f64 {
+    1.0
+}
+fn default_llm_timeout() -> u64 {
+    8000
+}
+fn default_max_output_tokens() -> u32 {
+    1024
+}
+fn default_dictionary_max_candidates() -> usize {
+    0
+}
+fn default_llm_max_token_parameter() -> LlmMaxTokenParameter {
+    LlmMaxTokenParameter::MaxCompletionTokens
+}
+fn default_llm_provider() -> String {
+    "openai".into()
+}
+fn default_llm_active_profile() -> String {
+    "openai".into()
+}
+fn default_llm_profiles() -> BTreeMap<String, LlmProfileConfig> {
+    let mut profiles = BTreeMap::new();
+    profiles.insert(
+        "apfel".into(),
+        LlmProfileConfig {
+            name: "APFEL".into(),
+            provider: "apfel".into(),
+            api_protocol: LlmApiProtocol::OpenaiChat,
+            base_url: "http://127.0.0.1:11434/v1".into(),
+            api_key: String::new(),
+            model: "apple-foundationmodel".into(),
+            endpoint_path: "/chat/completions".into(),
+            max_token_parameter: LlmMaxTokenParameter::MaxTokens,
+            no_reasoning_control: LlmNoReasoningControl::None,
+            mlx: MlxLlmConfig::default(),
+        },
+    );
+    profiles.insert(
+        "mlx".into(),
+        LlmProfileConfig {
+            name: "MLX (Apple Silicon)".into(),
+            provider: "mlx".into(),
+            api_protocol: LlmApiProtocol::OpenaiChat,
+            base_url: String::new(),
+            api_key: String::new(),
+            model: String::new(),
+            endpoint_path: String::new(),
+            max_token_parameter: LlmMaxTokenParameter::MaxTokens,
+            no_reasoning_control: LlmNoReasoningControl::None,
+            mlx: MlxLlmConfig::default(),
+        },
+    );
+    profiles.insert(
+        "openai".into(),
+        LlmProfileConfig {
+            name: "OpenAI Chat Completions".into(),
+            provider: "openai".into(),
+            api_protocol: LlmApiProtocol::OpenaiChat,
+            base_url: "https://api.openai.com/v1".into(),
+            api_key: String::new(),
+            model: "gpt-5.4-nano".into(),
+            endpoint_path: "/chat/completions".into(),
+            max_token_parameter: LlmMaxTokenParameter::MaxCompletionTokens,
+            no_reasoning_control: LlmNoReasoningControl::None,
+            mlx: MlxLlmConfig::default(),
+        },
+    );
+    profiles.insert(
+        "openai-responses".into(),
+        LlmProfileConfig {
+            name: "OpenAI Responses".into(),
+            provider: "openai".into(),
+            api_protocol: LlmApiProtocol::OpenaiResponses,
+            base_url: "https://api.openai.com/v1".into(),
+            api_key: String::new(),
+            model: "gpt-5.4-nano".into(),
+            endpoint_path: "/responses".into(),
+            max_token_parameter: LlmMaxTokenParameter::MaxCompletionTokens,
+            no_reasoning_control: LlmNoReasoningControl::None,
+            mlx: MlxLlmConfig::default(),
+        },
+    );
+    profiles.insert(
+        "anthropic".into(),
+        LlmProfileConfig {
+            name: "Anthropic Messages".into(),
+            provider: "anthropic".into(),
+            api_protocol: LlmApiProtocol::AnthropicMessages,
+            base_url: "https://api.anthropic.com/v1".into(),
+            api_key: String::new(),
+            model: String::new(),
+            endpoint_path: "/messages".into(),
+            max_token_parameter: LlmMaxTokenParameter::MaxTokens,
+            no_reasoning_control: LlmNoReasoningControl::None,
+            mlx: MlxLlmConfig::default(),
+        },
+    );
+    profiles
+}
+fn default_mlx_llm_model() -> String {
+    "mlx/Qwen3-0.6B-4bit".into()
+}
+fn default_dictionary_path() -> String {
+    "dictionary.txt".into()
+}
+fn default_system_prompt_path() -> String {
+    "system_prompt.txt".into()
+}
+fn default_abort_key() -> String {
+    "escape".into()
+}
+
+fn default_trigger_key() -> String {
+    "fn".into()
+}
+
+fn default_trigger_mode() -> String {
+    "hold".into()
+}
+
+fn default_user_prompt_path() -> String {
+    "user_prompt.txt".into()
+}
+
+fn default_overlay_font_family() -> String {
+    "system".to_string()
+}
+
+fn default_overlay_font_size() -> u16 {
+    13
+}
+
+fn default_overlay_bottom_margin() -> u16 {
+    10
+}
+
+fn default_overlay_limit_visible_lines() -> bool {
+    true
+}
+
+fn default_overlay_max_visible_lines() -> u16 {
+    3
+}
+
+fn legacy_translate_to_english_prompt_template() -> PromptTemplate {
+    PromptTemplate {
+        name: "翻译英文".into(),
+        enabled: true,
+        shortcut: 1,
+        system_prompt: Some(
+            "将用户的语音输入翻译为流畅的英文。保持原意，不要添加额外内容。只输出翻译结果。".into(),
+        ),
+        system_prompt_path: None,
+    }
+}
+
+fn default_prompt_templates() -> Vec<PromptTemplate> {
+    vec![
+        PromptTemplate {
+            name: "Перевести на английский".into(),
+            enabled: true,
+            shortcut: 1,
+            system_prompt: Some(
+                "Переведи голосовой ввод пользователя на английский язык, сохранив смысл и тон. \
+                 Ничего не добавляй. Выведи только перевод."
+                    .into(),
+            ),
+            system_prompt_path: None,
+        },
+        PromptTemplate {
+            name: "Короче".into(),
+            enabled: true,
+            shortcut: 2,
+            system_prompt: Some(
+                "Сократи голосовой ввод пользователя, сохранив смысл: убери повторы, воду и \
+                 слова-паразиты. Ничего не добавляй. Выведи только результат."
+                    .into(),
+            ),
+            system_prompt_path: None,
+        },
+        PromptTemplate {
+            name: "Деловой стиль".into(),
+            enabled: true,
+            shortcut: 3,
+            system_prompt: Some(
+                "Перепиши голосовой ввод пользователя в сдержанном деловом стиле: нейтральные \
+                 письменные формулировки, без разговорных оборотов. Сохрани смысл и примерно ту \
+                 же длину, ничего не добавляй. Выведи только результат."
+                    .into(),
+            ),
+            system_prompt_path: None,
+        },
+    ]
+}
+
+fn legacy_default_prompt_templates() -> Vec<PromptTemplate> {
+    vec![
+        legacy_translate_to_english_prompt_template(),
+        PromptTemplate {
+            name: "繁体中文".into(),
+            enabled: true,
+            shortcut: 2,
+            system_prompt: Some(
+                "将用户的语音输入翻译为流畅的繁体中文。保持原意，不要添加额外内容。只输出翻译结果。"
+                    .into(),
+            ),
+            system_prompt_path: None,
+        },
+        PromptTemplate {
+            name: "推文风格".into(),
+            enabled: true,
+            shortcut: 3,
+            system_prompt: Some(
+                "将用户的语音输入改写为适合发 Twitter/X 的简短推文。280字符以内，可适当加emoji。只输出推文内容。"
+                    .into(),
+            ),
+            system_prompt_path: None,
+        },
+        PromptTemplate {
+            name: "小红书".into(),
+            enabled: true,
+            shortcut: 4,
+            system_prompt: Some(
+                "将用户的语音输入改写为适合小红书的帖子风格。加上合适的emoji和标题，语气活泼亲切。只输出帖子内容。"
+                    .into(),
+            ),
+            system_prompt_path: None,
+        },
+        PromptTemplate {
+            name: "优化技术名词".into(),
+            enabled: true,
+            shortcut: 5,
+            system_prompt: Some(
+                "将用户的语音输入中包含的技术相关名词进行校正。保持原意，不要添加额外内容。只输出校正之后的结果。"
+                    .into(),
+            ),
+            system_prompt_path: None,
+        },
+    ]
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        serde_yaml::from_str("{}").unwrap()
+    }
+}
+impl Default for AsrSection {
+    fn default() -> Self {
+        serde_yaml::from_str("{}").unwrap()
+    }
+}
+impl Default for DoubaoAsrConfig {
+    fn default() -> Self {
+        serde_yaml::from_str("{}").unwrap()
+    }
+}
+impl Default for LlmSection {
+    fn default() -> Self {
+        serde_yaml::from_str("{}").unwrap()
+    }
+}
+impl Default for FeedbackSection {
+    fn default() -> Self {
+        serde_yaml::from_str("{}").unwrap()
+    }
+}
+impl Default for DictionarySection {
+    fn default() -> Self {
+        serde_yaml::from_str("{}").unwrap()
+    }
+}
+impl Default for OverlaySection {
+    fn default() -> Self {
+        serde_yaml::from_str("{}").unwrap()
+    }
+}
+impl Default for HotkeySection {
+    fn default() -> Self {
+        serde_yaml::from_str("{}").unwrap()
+    }
+}
+
+// ─── Config Directory ───────────────────────────────────────────────
+
+/// Returns ~/.velikiy-moguchiy/, or ~/.koe/ from before the rename while
+/// only that one exists (see `velikiy_moguchiy_asr::app_dir`).
+pub fn config_dir() -> PathBuf {
+    velikiy_moguchiy_asr::app_dir::app_data_dir()
+}
+
+/// Returns ~/.velikiy-moguchiy/config.yaml
+pub fn config_path() -> PathBuf {
+    config_dir().join("config.yaml")
+}
+
+/// Resolve a path relative to config dir.
+fn resolve_path(p: &str) -> PathBuf {
+    let path = Path::new(p);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        config_dir().join(path)
+    }
+}
+
+impl PromptTemplate {
+    /// Resolve the system prompt: inline text takes priority, then file path.
+    pub fn resolve_system_prompt(&self) -> Option<String> {
+        if let Some(ref text) = self.system_prompt {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+        if let Some(ref path) = self.system_prompt_path {
+            let resolved = resolve_path(path);
+            if let Ok(content) = std::fs::read_to_string(&resolved) {
+                let trimmed = content.trim().to_string();
+                if !trimmed.is_empty() {
+                    return Some(trimmed);
+                }
+            }
+        }
+        None
+    }
+}
+
+/// Resolve a model directory path.
+/// Absolute paths are used directly; relative paths are resolved under ~/.velikiy-moguchiy/models/.
+pub fn resolve_model_dir(model: &str) -> PathBuf {
+    let path = Path::new(model);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        crate::model_manager::models_dir().join(model)
+    }
+}
+
+/// Resolve dictionary path (relative to config dir).
+pub fn resolve_dictionary_path(config: &Config) -> PathBuf {
+    resolve_path(&config.dictionary.path)
+}
+
+/// Resolve system prompt path (relative to config dir).
+pub fn resolve_system_prompt_path(config: &Config) -> PathBuf {
+    resolve_path(&config.llm.system_prompt_path)
+}
+
+/// Resolve user prompt path (relative to config dir).
+pub fn resolve_user_prompt_path(config: &Config) -> PathBuf {
+    resolve_path(&config.llm.user_prompt_path)
+}
+
+// ─── Environment Variable Substitution ──────────────────────────────
+
+/// Replace ${VAR_NAME} patterns with environment variable values.
+///
+/// Performs a single, non-recursive pass: each `${VAR}` token in the
+/// *original* input is replaced exactly once.  Substituted values are
+/// appended verbatim and never re-scanned, which prevents:
+/// - infinite loops when a value contains `${...}` (including self-references)
+/// - silent corruption of API keys or paths that happen to contain `${`
+fn substitute_env_vars(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut rest = input;
+    while let Some(start) = rest.find("${") {
+        let end = match rest[start + 2..].find('}') {
+            Some(pos) => start + 2 + pos,
+            None => break, // no closing brace; copy remainder verbatim below
+        };
+        let var_name = &rest[start + 2..end];
+        let value = std::env::var(var_name).unwrap_or_default();
+        result.push_str(&rest[..start]);
+        result.push_str(&value); // value is NOT rescanned
+        rest = &rest[end + 1..];
+    }
+    result.push_str(rest);
+    result
+}
+
+// ─── V1 → V2 Config Migration ──────────────────────────────────────
+
+/// V1 ASR fields that indicate the old flat format.
+const V1_ASR_KEYS: &[&str] = &[
+    "api_key",
+    "app_key",
+    "access_key",
+    "url",
+    "resource_id",
+    "connect_timeout_ms",
+    "final_wait_timeout_ms",
+    "enable_ddc",
+    "enable_itn",
+    "enable_punc",
+    "enable_nonstream",
+];
+
+/// Check if the config file uses V1 ASR format (flat fields under `asr:`)
+/// and migrate it to V2 format (provider-based) in place.
+fn migrate_config_v1_to_v2(path: &Path) -> Result<bool> {
+    let raw = std::fs::read_to_string(path)
+        .map_err(|e| CoreError::Config(format!("read {}: {e}", path.display())))?;
+
+    let doc: serde_yaml::Value = serde_yaml::from_str(&raw)
+        .map_err(|e| CoreError::Config(format!("parse {}: {e}", path.display())))?;
+
+    let asr = match doc.get("asr") {
+        Some(v) => v,
+        None => return Ok(false),
+    };
+
+    let asr_map = match asr.as_mapping() {
+        Some(m) => m,
+        None => return Ok(false),
+    };
+
+    // If `asr` already has a `provider` key, it's already V2
+    if asr_map.contains_key(serde_yaml::Value::String("provider".into())) {
+        return Ok(false);
+    }
+
+    // If `asr` has a `doubao` key, it's already V2 (just missing provider field, which defaults)
+    if asr_map.contains_key(serde_yaml::Value::String("doubao".into())) {
+        return Ok(false);
+    }
+
+    // Check if any V1-specific key exists
+    let has_v1_keys = V1_ASR_KEYS
+        .iter()
+        .any(|k| asr_map.contains_key(serde_yaml::Value::String((*k).into())));
+
+    if !has_v1_keys {
+        return Ok(false);
+    }
+
+    log::info!("detected V1 ASR config, migrating to V2 format...");
+
+    // Extract V1 fields into a new doubao sub-mapping
+    let mut doubao_map = serde_yaml::Mapping::new();
+    let mut new_asr_map = serde_yaml::Mapping::new();
+
+    new_asr_map.insert(
+        serde_yaml::Value::String("provider".into()),
+        serde_yaml::Value::String("doubao".into()),
+    );
+
+    for (key, value) in asr_map {
+        let key_str = key.as_str().unwrap_or("");
+        if V1_ASR_KEYS.contains(&key_str) {
+            doubao_map.insert(key.clone(), value.clone());
+        } else {
+            // Preserve any unknown keys at the asr level
+            new_asr_map.insert(key.clone(), value.clone());
+        }
+    }
+
+    new_asr_map.insert(
+        serde_yaml::Value::String("doubao".into()),
+        serde_yaml::Value::Mapping(doubao_map),
+    );
+
+    // Rebuild the full document
+    let mut new_doc = match doc.as_mapping() {
+        Some(m) => m.clone(),
+        None => return Ok(false),
+    };
+    new_doc.insert(
+        serde_yaml::Value::String("asr".into()),
+        serde_yaml::Value::Mapping(new_asr_map),
+    );
+
+    // Write back with a header comment
+    let yaml_str = serde_yaml::to_string(&serde_yaml::Value::Mapping(new_doc))
+        .map_err(|e| CoreError::Config(format!("serialize migrated config: {e}")))?;
+
+    let output = format!(
+        "# Velikiy Moguchiy (Великий & Могучий) - Voice Input Tool Configuration\n\
+         # ~/.velikiy-moguchiy/config.yaml\n\
+         # Migrated to V2 format (multi-provider ASR)\n\n\
+         {yaml_str}"
+    );
+
+    atomic_write_file(path, &output)?;
+
+    log::info!("config migrated to V2 format successfully");
+    Ok(true)
+}
+
+/// Ensure hotkey config persisted on disk uses the normalized trigger key.
+/// The legacy `hotkey.cancel_key` field is ignored at runtime and no longer
+/// written back to disk.
+fn normalize_hotkey_config(path: &Path, config: &Config) -> Result<bool> {
+    let raw = std::fs::read_to_string(path)
+        .map_err(|e| CoreError::Config(format!("read {}: {e}", path.display())))?;
+
+    let mut doc: serde_yaml::Value = serde_yaml::from_str(&raw)
+        .map_err(|e| CoreError::Config(format!("parse {}: {e}", path.display())))?;
+
+    let doc_map = match doc.as_mapping_mut() {
+        Some(map) => map,
+        None => return Ok(false),
+    };
+
+    let normalized_trigger = config.hotkey.normalized_trigger_key();
+    let hotkey_key = serde_yaml::Value::String("hotkey".into());
+
+    let hotkey_value = doc_map
+        .entry(hotkey_key)
+        .or_insert_with(|| serde_yaml::Value::Mapping(serde_yaml::Mapping::new()));
+
+    let hotkey_map = match hotkey_value.as_mapping_mut() {
+        Some(map) => map,
+        None => return Ok(false),
+    };
+
+    let trigger_key = serde_yaml::Value::String("trigger_key".into());
+    let stored_trigger = hotkey_map.get(&trigger_key).and_then(|v| v.as_str());
+
+    if stored_trigger == Some(normalized_trigger.as_str()) {
+        return Ok(false);
+    }
+
+    hotkey_map.insert(trigger_key, serde_yaml::Value::String(normalized_trigger));
+
+    let yaml_str = serde_yaml::to_string(&doc)
+        .map_err(|e| CoreError::Config(format!("serialize normalized config: {e}")))?;
+
+    let output = format!(
+        "# Velikiy Moguchiy (Великий & Могучий) - Voice Input Tool Configuration\n\
+         # ~/.velikiy-moguchiy/config.yaml\n\n\
+         {yaml_str}"
+    );
+
+    atomic_write_file(path, &output)?;
+
+    log::info!("normalized hotkey config on disk");
+    Ok(true)
+}
+
+/// Replace the previous bundled template set with the new minimal default,
+/// but only when the user still has the legacy built-in templates unchanged.
+fn normalize_prompt_templates_config(path: &Path, config: &Config) -> Result<bool> {
+    if config.prompt_templates != legacy_default_prompt_templates() {
+        return Ok(false);
+    }
+
+    let raw = std::fs::read_to_string(path)
+        .map_err(|e| CoreError::Config(format!("read {}: {e}", path.display())))?;
+
+    let mut doc: serde_yaml::Value = serde_yaml::from_str(&raw)
+        .map_err(|e| CoreError::Config(format!("parse {}: {e}", path.display())))?;
+
+    let doc_map = match doc.as_mapping_mut() {
+        Some(map) => map,
+        None => return Ok(false),
+    };
+
+    let yaml_templates = serde_yaml::to_value(default_prompt_templates())
+        .map_err(|e| CoreError::Config(format!("serialize prompt templates: {e}")))?;
+
+    doc_map.insert(
+        serde_yaml::Value::String("prompt_templates".into()),
+        yaml_templates,
+    );
+
+    let yaml_str = serde_yaml::to_string(&doc)
+        .map_err(|e| CoreError::Config(format!("serialize normalized config: {e}")))?;
+
+    let output = format!(
+        "# Velikiy Moguchiy (Великий & Могучий) - Voice Input Tool Configuration\n\
+         # ~/.velikiy-moguchiy/config.yaml\n\n\
+         {yaml_str}"
+    );
+
+    atomic_write_file(path, &output)?;
+
+    log::info!("normalized legacy prompt templates on disk");
+    Ok(true)
+}
+
+// ─── Load & Ensure ─────────────────────────────────────────────────
+
+/// Load config from ~/.velikiy-moguchiy/config.yaml.
+/// Automatically migrates V1 config to V2 if needed.
+/// Performs environment variable substitution before parsing.
+pub fn load_config() -> Result<Config> {
+    let path = config_path();
+
+    if !path.exists() {
+        return Err(CoreError::Config(format!(
+            "config file not found: {}",
+            path.display()
+        )));
+    }
+
+    // Attempt V1 → V2 migration before loading
+    match migrate_config_v1_to_v2(&path) {
+        Ok(true) => log::info!("config file migrated from V1 to V2"),
+        Ok(false) => {}
+        Err(e) => log::warn!("config migration check failed (will try loading as-is): {e}"),
+    }
+
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| CoreError::Config(format!("read {}: {e}", path.display())))?;
+
+    let substituted = substitute_env_vars(&raw);
+
+    let mut config: Config = serde_yaml::from_str(&substituted)
+        .map_err(|e| CoreError::Config(format!("parse {}: {e}", path.display())))?;
+
+    match normalize_prompt_templates_config(&path, &config) {
+        Ok(true) => {
+            log::info!("config file updated with minimal default prompt templates");
+            let raw = std::fs::read_to_string(&path)
+                .map_err(|e| CoreError::Config(format!("read {}: {e}", path.display())))?;
+            let substituted = substitute_env_vars(&raw);
+            config = serde_yaml::from_str(&substituted)
+                .map_err(|e| CoreError::Config(format!("parse {}: {e}", path.display())))?;
+        }
+        Ok(false) => {}
+        Err(e) => log::warn!("prompt templates normalization failed: {e}"),
+    }
+
+    match normalize_hotkey_config(&path, &config) {
+        Ok(true) => log::info!("config file updated with normalized hotkey settings"),
+        Ok(false) => {}
+        Err(e) => log::warn!("hotkey config normalization failed: {e}"),
+    }
+
+    Ok(config)
+}
+
+/// Ensure ~/.velikiy-moguchiy/ exists with default config.yaml and dictionary.txt.
+/// Returns true if files were created (first launch).
+pub fn ensure_defaults() -> Result<bool> {
+    let dir = config_dir();
+    let config_file = config_path();
+    let dict_file = dir.join("dictionary.txt");
+    let system_prompt_file = dir.join("system_prompt.txt");
+    let user_prompt_file = dir.join("user_prompt.txt");
+
+    let mut created = false;
+
+    if !dir.exists() {
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| CoreError::Config(format!("create {}: {e}", dir.display())))?;
+        created = true;
+    }
+    // config.yaml holds API keys — keep the whole directory owner-only,
+    // tightening the mode on every launch in case it was created loosely.
+    // Best-effort on the directory itself, but never silently: the file-level
+    // 0600 below is the hard line for the secrets themselves.
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)) {
+            log::warn!(
+                "could not tighten permissions on config directory {}: {e}",
+                dir.display()
+            );
+        }
+    }
+
+    let defaults: &[(&std::path::Path, &str)] = &[
+        (&config_file, DEFAULT_CONFIG_YAML),
+        (&dict_file, DEFAULT_DICTIONARY_TXT),
+        (&system_prompt_file, DEFAULT_SYSTEM_PROMPT),
+        (&user_prompt_file, DEFAULT_USER_PROMPT),
+    ];
+
+    if let Err(e) = crate::dictionary::ensure_starter_file(&dir) {
+        log::warn!("starter dictionary: {e}");
+    }
+
+    for (path, content) in defaults {
+        if !path.exists() {
+            if *path == config_file {
+                write_owner_only(path, content)
+                    .map_err(|e| CoreError::Config(format!("write {}: {e}", path.display())))?;
+            } else {
+                std::fs::write(path, content)
+                    .map_err(|e| CoreError::Config(format!("write {}: {e}", path.display())))?;
+            }
+            log::info!("created default: {}", path.display());
+            created = true;
+        }
+    }
+
+    // Enforce owner-only mode on a pre-existing config.yaml (contains secrets).
+    if config_file.exists() {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) =
+            std::fs::set_permissions(&config_file, std::fs::Permissions::from_mode(0o600))
+        {
+            log::warn!(
+                "could not make {} owner-only ({e}); the file may contain API keys \
+                 readable by other local users — fix its permissions manually",
+                config_file.display()
+            );
+        }
+    }
+
+    // Install default model manifests into ~/.velikiy-moguchiy/models/
+    let models_dir = crate::model_manager::models_dir();
+    for (rel_path, content) in DEFAULT_MANIFESTS {
+        let manifest_dir = models_dir.join(rel_path);
+        let manifest_file = manifest_dir.join(".koe-manifest.json");
+        if !manifest_file.exists() {
+            std::fs::create_dir_all(&manifest_dir).map_err(|e| {
+                CoreError::Config(format!("create {}: {e}", manifest_dir.display()))
+            })?;
+            std::fs::write(&manifest_file, content).map_err(|e| {
+                CoreError::Config(format!("write {}: {e}", manifest_file.display()))
+            })?;
+            log::info!("installed manifest: {}", manifest_file.display());
+            created = true;
+        }
+    }
+
+    Ok(created)
+}
+
+// ─── Key-path Get / Set ────────────────────────────────────────────
+
+/// Get a config value by dot-separated key path (e.g. `"asr.doubao.app_key"`).
+/// Returns an empty string if the key is not found.
+pub fn config_get(key_path: &str) -> Result<String> {
+    let path = config_path();
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| CoreError::Config(format!("read {}: {e}", path.display())))?;
+    let root: serde_yaml::Value = serde_yaml::from_str(&raw)
+        .map_err(|e| CoreError::Config(format!("parse {}: {e}", path.display())))?;
+
+    let mut current = &root;
+    for part in key_path.split('.') {
+        let key = serde_yaml::Value::String(part.to_string());
+        match current.as_mapping().and_then(|m| m.get(&key)) {
+            Some(v) => current = v,
+            None => return Ok(String::new()),
+        }
+    }
+
+    let s = match current {
+        serde_yaml::Value::String(s) => s.clone(),
+        serde_yaml::Value::Bool(b) => b.to_string(),
+        serde_yaml::Value::Number(n) => n.to_string(),
+        _ => String::new(),
+    };
+    Ok(s)
+}
+
+/// Whether a config flag is on. Accepts the same spellings as the Obj-C side
+/// (`true`, `1`, `yes`, `on`); a missing key or unreadable file is off.
+pub fn config_flag(key_path: &str) -> bool {
+    config_get(key_path).is_ok_and(|v| is_truthy(&v))
+}
+
+fn is_truthy(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "true" | "1" | "yes" | "on"
+    )
+}
+
+/// Get a config value by dot-separated key path as JSON.
+/// Unlike [`config_get`], this preserves non-scalar values (maps, sequences).
+/// Returns an empty string if the key is not found.
+pub fn config_get_json(key_path: &str) -> Result<String> {
+    let path = config_path();
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| CoreError::Config(format!("read {}: {e}", path.display())))?;
+    let root: serde_yaml::Value = serde_yaml::from_str(&raw)
+        .map_err(|e| CoreError::Config(format!("parse {}: {e}", path.display())))?;
+
+    let mut current = &root;
+    for part in key_path.split('.') {
+        let key = serde_yaml::Value::String(part.to_string());
+        match current.as_mapping().and_then(|m| m.get(&key)) {
+            Some(v) => current = v,
+            None => return Ok(String::new()),
+        }
+    }
+
+    serde_json::to_string(current)
+        .map_err(|e| CoreError::Config(format!("encode {key_path} to JSON: {e}")))
+}
+
+/// Write serialized YAML to config.yaml atomically.
+pub fn atomic_write_config(data: &str) -> Result<()> {
+    atomic_write_file(&config_path(), data)
+}
+
+/// Write `data` to `path` with owner-only (0600) permissions, tightening the
+/// mode before any content is written even when the file already exists.
+fn write_owner_only(path: &Path, data: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)?;
+    file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    file.write_all(data.as_bytes())
+}
+
+/// Write data to a file atomically: write to a temp sibling, then rename.
+/// The temp file is created owner-only so secrets (API keys) never sit on
+/// disk with umask-derived permissions; the rename carries the mode over.
+fn atomic_write_file(path: &Path, data: &str) -> Result<()> {
+    let tmp = path.with_extension("yaml.tmp");
+    write_owner_only(&tmp, data)
+        .map_err(|e| CoreError::Config(format!("write {}: {e}", tmp.display())))?;
+    std::fs::rename(&tmp, path).map_err(|e| {
+        CoreError::Config(format!(
+            "rename {} -> {}: {e}",
+            tmp.display(),
+            path.display()
+        ))
+    })?;
+    Ok(())
+}
+
+/// Set a config value by dot-separated key path. Reads, modifies, and writes back.
+/// Creates intermediate mappings as needed. Infers YAML type from the string value.
+pub fn config_set(key_path: &str, value: &str) -> Result<()> {
+    let path = config_path();
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut root: serde_yaml::Value = if raw.trim().is_empty() {
+        serde_yaml::Value::Mapping(serde_yaml::Mapping::new())
+    } else {
+        serde_yaml::from_str(&raw)
+            .map_err(|e| CoreError::Config(format!("parse {}: {e}", path.display())))?
+    };
+
+    let parts: Vec<&str> = key_path.split('.').collect();
+    let (sections, leaf_slice) = parts.split_at(parts.len() - 1);
+    let leaf = leaf_slice[0];
+
+    let parent = navigate_to_parent(&mut root, sections);
+    parent.insert(
+        serde_yaml::Value::String(leaf.to_string()),
+        yaml_value_from_str(value),
+    );
+
+    let serialized =
+        serde_yaml::to_string(&root).map_err(|e| CoreError::Config(format!("serialize: {e}")))?;
+    atomic_write_file(&path, &serialized)?;
+
+    Ok(())
+}
+
+/// Set a config value by dot-separated key path to the YAML equivalent of a JSON
+/// document (maps, sequences, scalars). Like [`config_set`], creates
+/// intermediate mappings.
+pub fn config_set_json(key_path: &str, json: &str) -> Result<()> {
+    let value: serde_json::Value = serde_json::from_str(json)
+        .map_err(|e| CoreError::Config(format!("parse JSON for {key_path}: {e}")))?;
+    let value = serde_yaml::to_value(&value)
+        .map_err(|e| CoreError::Config(format!("convert {key_path} to YAML: {e}")))?;
+
+    let path = config_path();
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut root: serde_yaml::Value = if raw.trim().is_empty() {
+        serde_yaml::Value::Mapping(serde_yaml::Mapping::new())
+    } else {
+        serde_yaml::from_str(&raw)
+            .map_err(|e| CoreError::Config(format!("parse {}: {e}", path.display())))?
+    };
+
+    let parts: Vec<&str> = key_path.split('.').collect();
+    let (sections, leaf_slice) = parts.split_at(parts.len() - 1);
+    navigate_to_parent(&mut root, sections)
+        .insert(serde_yaml::Value::String(leaf_slice[0].to_string()), value);
+
+    let serialized =
+        serde_yaml::to_string(&root).map_err(|e| CoreError::Config(format!("serialize: {e}")))?;
+    atomic_write_file(&path, &serialized)
+}
+
+pub fn llm_profiles_payload() -> Result<LlmProfilesPayload> {
+    Ok(load_config()?.llm.profiles_payload())
+}
+
+pub fn save_llm_profiles_payload(payload: &LlmProfilesPayload) -> Result<()> {
+    let path = config_path();
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut root: serde_yaml::Value = if raw.trim().is_empty() {
+        serde_yaml::Value::Mapping(serde_yaml::Mapping::new())
+    } else {
+        serde_yaml::from_str(&raw)
+            .map_err(|e| CoreError::Config(format!("parse {}: {e}", path.display())))?
+    };
+
+    let llm_map = navigate_to_parent(&mut root, &["llm"]);
+    llm_map.insert(
+        serde_yaml::Value::String("active_profile".into()),
+        serde_yaml::Value::String(payload.active_profile.clone()),
+    );
+    let profiles_value = serde_yaml::to_value(&payload.profiles)
+        .map_err(|e| CoreError::Config(format!("serialize LLM profiles: {e}")))?;
+    llm_map.insert(serde_yaml::Value::String("profiles".into()), profiles_value);
+
+    let serialized =
+        serde_yaml::to_string(&root).map_err(|e| CoreError::Config(format!("serialize: {e}")))?;
+    atomic_write_file(&path, &serialized)?;
+
+    Ok(())
+}
+
+/// Recursively navigate into nested YAML mappings by path segments, creating
+/// intermediate mappings as needed. Returns a mutable ref to the final mapping.
+fn navigate_to_parent<'a>(
+    node: &'a mut serde_yaml::Value,
+    sections: &[&str],
+) -> &'a mut serde_yaml::Mapping {
+    if !node.is_mapping() {
+        *node = serde_yaml::Value::Mapping(serde_yaml::Mapping::new());
+    }
+    if sections.is_empty() {
+        return node.as_mapping_mut().unwrap();
+    }
+    let (first, rest) = sections.split_first().unwrap();
+    let key = serde_yaml::Value::String(first.to_string());
+    let map = node.as_mapping_mut().unwrap();
+    let child = map
+        .entry(key)
+        .or_insert_with(|| serde_yaml::Value::Mapping(serde_yaml::Mapping::new()));
+    navigate_to_parent(child, rest)
+}
+
+/// Infer YAML scalar type from a string value.
+fn yaml_value_from_str(s: &str) -> serde_yaml::Value {
+    match s {
+        "true" => serde_yaml::Value::Bool(true),
+        "false" => serde_yaml::Value::Bool(false),
+        _ => match s.parse::<i64>() {
+            Ok(n) => serde_yaml::Value::Number(n.into()),
+            Err(_) => serde_yaml::Value::String(s.to_string()),
+        },
+    }
+}
+
+const DEFAULT_CONFIG_YAML: &str = r#"# Velikiy Moguchiy (Великий & Могучий) - Voice Input Tool Configuration
+# ~/.velikiy-moguchiy/config.yaml
+
+asr:
+  # ASR provider: "qwen" (default; DashScope, your own key), "doubao", "glm", "mimo", "apple-speech", "mlx", "sherpa-onnx"
+  provider: "qwen"
+
+  # Doubao (豆包) Streaming ASR 2.0 (优化版双向流式)
+  doubao:
+    url: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+    api_key: ""          # X-Api-Key (新版控制台, 优先使用)
+    app_key: ""          # X-Api-App-Key (旧版控制台 App ID)
+    access_key: ""       # X-Api-Access-Key (旧版控制台 Access Token)
+    resource_id: "volc.seedasr.sauc.duration"
+    connect_timeout_ms: 3000
+    final_wait_timeout_ms: 5000
+    enable_ddc: true     # 语义顺滑 (去除口语重复/语气词)
+    enable_itn: true     # 文本规范化 (数字、日期等)
+    enable_punc: true    # 自动标点
+    enable_nonstream: true  # 二遍识别 (流式+非流式, 提升准确率)
+    # language: ""       # 语言代码: zh-CN, en-US, ja-JP 等, 空=自动(中英文+方言)
+    # end_window_size: 800       # 强制判停时间(ms), 最小200
+    # force_to_speech_time: 1000 # 音频超过该时长才判停(ms)
+    # vad_segment_duration: 3000 # 语义切句最大静音阈值(ms)
+    # output_zh_variant: ""      # 繁体输出: traditional/tw/hk
+    # enable_accelerate_text: false  # 首字返回加速
+    # accelerate_score: 0        # 加速程度 0-20
+    # headers:           # custom HTTP headers for WebSocket connection
+    #   X-Custom-Header: "value"
+
+  # Qwen (Aliyun DashScope) Realtime ASR
+  qwen:
+    url: "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+    api_key: ""
+    # api_keys: []       # several DashScope keys: the next one is used when a key is rejected or out of quota
+    model: "qwen3.8-omni-flash-realtime"  # or qwen3-asr-flash-realtime: verbatim, no rewording
+    language: "zh"
+    connect_timeout_ms: 3000
+    final_wait_timeout_ms: 5000
+    # app_modes:         # output mode (raw | light | structured | formal) per app bundle id or prefix
+    #   com.apple.Notes: light
+    # use_field_context: true  # Omni: give the model the window title and the text before the caret
+    # headers:           # custom HTTP headers for WebSocket connection
+    #   X-Custom-Header: "value"
+
+  # GLM (Zhipu/智谱) ASR — HTTP POST + SSE streaming
+  glm:
+    url: "https://open.bigmodel.cn/api/paas/v4/audio/transcriptions"
+    api_key: ""          # 从 https://bigmodel.cn/usercenter/proj-mgmt/apikeys 获取
+    model: "glm-asr-2512"  # glm-asr-2512 | glm-asr-1
+
+  # MiMo (Xiaomi/小米) ASR — OpenAI-compatible HTTP POST + SSE streaming
+  mimo:
+    url: "https://api.xiaomimimo.com/v1/chat/completions"
+    api_key: ""          # 从 https://platform.xiaomimimo.com 获取
+    model: "mimo-v2.5-asr"
+    language: "auto"     # auto | zh-CN | en-US | ja-JP 等
+
+  # Apple Speech local ASR (macOS 26+, zero-config, no model download)
+  apple-speech:
+    locale: "zh_CN"                 # zh_CN | en_US | en_GB | ja_JP | ko_KR
+
+  # MLX local ASR (Apple Silicon only)
+  mlx:
+    model: "mlx/Qwen3-ASR-0.6B-4bit"       # relative to ~/.velikiy-moguchiy/models/, or absolute path
+    delay_preset: "realtime"    # realtime | agent | subtitle
+    language: "auto"            # auto | zh | en
+
+  # Sherpa-ONNX local ASR (CPU)
+  sherpa-onnx:
+    model: "sherpa-onnx/bilingual-zh-en"    # relative to ~/.velikiy-moguchiy/models/, or absolute path
+    num_threads: 2
+    hotwords_score: 1.5         # dictionary term boost
+    endpoint_silence: 1.2       # trailing silence for sentence boundary (seconds)
+
+llm:
+  # Off by default: a fresh install has no api_key below, so leaving this on
+  # would fail every dictation until the user configures a profile. Turn it on
+  # from Settings → LLM once a profile has credentials.
+  enabled: false
+  prompt_templates_enabled: false  # show rewrite template buttons above the overlay after transcription
+  auto_paste_processed_text: true  # paste the first LLM-processed result into the active input immediately
+  active_profile: "openai"
+  temperature: 0
+  top_p: 1
+  timeout_ms: 8000
+  max_output_tokens: 1024
+  dictionary_max_candidates: 0             # 0 = send all entries to LLM
+  system_prompt_path: "system_prompt.txt"  # relative to ~/.velikiy-moguchiy/
+  user_prompt_path: "user_prompt.txt"      # relative to ~/.velikiy-moguchiy/
+  profiles:
+    openai:
+      name: "OpenAI Chat Completions"
+      provider: "openai"
+      api_protocol: "openai_chat"
+      base_url: "https://api.openai.com/v1"
+      api_key: ""          # or use ${LLM_API_KEY}
+      model: "gpt-5.4-nano"
+      endpoint_path: "/chat/completions"  # relative path appended to base_url
+      max_token_parameter: "max_completion_tokens"
+      no_reasoning_control: "none"
+    openai-responses:
+      name: "OpenAI Responses"
+      provider: "openai"
+      api_protocol: "openai_responses"
+      base_url: "https://api.openai.com/v1"
+      api_key: ""          # or use ${LLM_API_KEY}
+      model: "gpt-5.4-nano"
+      endpoint_path: "/responses"
+      max_token_parameter: "max_completion_tokens"
+      no_reasoning_control: "none"
+    anthropic:
+      name: "Anthropic Messages"
+      provider: "anthropic"
+      api_protocol: "anthropic_messages"
+      base_url: "https://api.anthropic.com/v1"
+      api_key: ""          # or use ${ANTHROPIC_API_KEY}
+      model: ""            # choose any text-capable model from /models
+      endpoint_path: "/messages"
+      max_token_parameter: "max_tokens"
+      no_reasoning_control: "none"
+    apfel:
+      name: "APFEL"
+      provider: "apfel"
+      api_protocol: "openai_chat"
+      base_url: "http://127.0.0.1:11434/v1"
+      api_key: ""           # optional; leave blank to send no Authorization header
+      model: "apple-foundationmodel"
+      endpoint_path: "/chat/completions"  # customize for non-standard OpenAI-compatible endpoints
+      max_token_parameter: "max_tokens"
+      no_reasoning_control: "none"
+    mlx:
+      name: "MLX (Apple Silicon)"
+      provider: "mlx"
+      mlx:
+        model: "mlx/Qwen3-0.6B-4bit"      # relative to ~/.velikiy-moguchiy/models/, or absolute path
+
+feedback:
+  start_sound: false
+  stop_sound: false
+  error_sound: false
+  mute_system_output: false
+
+dictionary:
+  path: "dictionary.txt"  # relative to ~/.velikiy-moguchiy/
+
+clipboard:
+  # 自动粘贴完成后，恢复原剪贴板内容前的等待时间（毫秒）。
+  # 取值范围 0-60000；0 表示粘贴完成后立即恢复（并非禁用恢复）。
+  # 值太小可能导致慢速应用还没读取剪贴板就被恢复；值太大则旧剪贴板内容回来得更晚。
+  # 仅影响自动粘贴流程；主动保留在剪贴板中的结果（如模板改写、无辅助功能权限时）不会被恢复。
+  # 无效值会回退到 1500 并记录警告，不影响其他配置项。
+  restore_delay_ms: 1500
+  # 为 true 时，最近一次听写的文本会留在剪贴板（标记为临时内容，剪贴板历史工具会忽略），
+  # 不再恢复之前的剪贴板内容。
+  keep_last_dictation: true
+
+history:
+  # Save an AAC (.m4a) recording of every dictation to ~/.velikiy-moguchiy/recordings/,
+  # including cancelled and failed ones.
+  save_recordings: true
+  # Delete recordings older than this many days (minimum 1).
+  recordings_retention_days: 30
+  # When a dictation ends with an error, re-transcribe its recording once in the
+  # background and put the text on the clipboard (never pasted automatically).
+  auto_retry_on_error: true
+
+# Opt-in collection of lip-reading training data: the webcam is recorded during
+# each dictation (H.264 MP4, 25 fps, no audio) and saved together with the
+# recognized text. Everything stays on this Mac; with capture_video off the
+# camera is never touched.
+lipdata:
+  capture_video: false
+  # <unix-ms>.mp4 + .txt + .json are written here for every kept dictation.
+  # Empty: lipdata/voiced inside the app's data folder. Point it at
+  # lipread/data/voiced of your lipread checkout to train on the clips.
+  dir: ""
+
+# Contributing to the shared lip-reading model (federated training): a separate
+# opt-in consent, off by default, independent of lipdata above. Only adapter
+# weight deltas would ever be sent, never video, audio or text. Community
+# training is not built into the app yet; this records your decision
+# (Settings > Controls > «Участвовать в общем обучении»).
+training:
+  contribute: false
+
+hotkey:
+  # 触发键：fn | left_option | right_option | left_command | right_command | left_control | right_control
+  # 也可以填 macOS keycode 数字来使用非修饰键，例如 122 (F1)、120 (F2)、99 (F3) 等
+  trigger_key: "fn"
+  trigger_mode: "hold"                 # hold | toggle | double_tap | auto
+  # 取消当前听写（不粘贴）的按键：escape | 按键名 / keycode 数字 | ""（关闭）
+  abort_key: "escape"
+  # 切换文字模式的按键（raw → light → structured → formal），写法同 translate_key；"" 为关闭
+  mode_key: ""
+  # 语音改写选中文字（原地替换）的按键，写法同 translate_key；"" 为关闭
+  edit_key: ""
+  # 撤销上一次插入（2 分钟内、同一输入框）的按键；"" 为关闭
+  undo_key: ""
+  # 在光标处再次粘贴上一次听写的按键；"" 为关闭
+  repaste_key: ""
+  # Experimental lip reading: hold this key and mouth the phrase silently
+  # (needs experimental.lips: true); same syntax as translate_key, "" is off
+  lips_key: ""
+  # 鼠标按键当作录音键：3 = 中键，4 / 5 = 侧键；0 为关闭
+  mouse_button: 0
+
+# 听写中的语音命令（"новая строка"、"отправь" 等）
+commands:
+  enabled: true
+
+# 语音片段：说出 trigger，插入 text（整句等于 trigger，或说 "вставь <trigger>"）
+snippets: []
+
+recording:
+  # 免提录音在说话之后静音这么多秒自动结束；0 为关闭（按住模式不受影响）
+  auto_stop_silence_s: 0
+
+overlay:
+  font_family: "system"
+  font_size: 13
+  bottom_margin: 10
+  limit_visible_lines: true
+  max_visible_lines: 3
+
+prompt_templates:
+  - name: "Перевести на английский"
+    enabled: true
+    shortcut: 1
+    system_prompt: "Переведи голосовой ввод пользователя на английский язык, сохранив смысл и тон. Ничего не добавляй. Выведи только перевод."
+  - name: "Короче"
+    enabled: true
+    shortcut: 2
+    system_prompt: "Сократи голосовой ввод пользователя, сохранив смысл: убери повторы, воду и слова-паразиты. Ничего не добавляй. Выведи только результат."
+  - name: "Деловой стиль"
+    enabled: true
+    shortcut: 3
+    system_prompt: "Перепиши голосовой ввод пользователя в сдержанном деловом стиле: нейтральные письменные формулировки, без разговорных оборотов. Сохрани смысл и примерно ту же длину, ничего не добавляй. Выведи только результат."
+
+# 实验性功能（默认全部关闭）
+experimental:
+  # ASR 识别完成后立即粘贴原始文本，LLM 修正返回后再原位替换。
+  # 仅在焦点、光标和已粘贴文本均未变化、且目标应用支持辅助功能文本替换时
+  # 才会替换；无法安全替换时保留原文，修正版进入剪贴板。
+  paste_asr_first: false
+  # 说话时直接在焦点输入框里实时输入识别文本（类似系统听写），
+  # 最终文本到达后原位修正；焦点切换到其他应用则停止。仅普通听写，需要辅助功能权限。
+  live_insert: false
+  # Silent dictation by the lips (hotkey.lips_key, settings in the lips section).
+  # Russian only, experimental; expect a rough transcript.
+  lips: false
+
+# Lip-reading service for experimental.lips: a Python process from lipread/
+# that keeps the model loaded and exits after idle_minutes without clips.
+lips:
+  service_dir: "~/velikiy-moguchiy/lipread"   # your lipread checkout (.venv + lips_service.py)
+  port: 8766
+  idle_minutes: 10
+  # Let Qwen pick the most likely phrase from the model's 20 best guesses.
+  rescore: true
+"#;
+
+const DEFAULT_DICTIONARY_TXT: &str = r#"# Пользовательский словарь «Великого & Могучего»
+# По одному термину в строке. Эти термины в приоритете при коррекции через LLM.
+# Строки, начинающиеся с #, — комментарии.
+
+"#;
+
+const DEFAULT_SYSTEM_PROMPT: &str = include_str!("default_system_prompt.txt");
+
+const DEFAULT_USER_PROMPT: &str = include_str!("default_user_prompt.txt");
+
+/// Default model manifests: (relative_path, json_content).
+/// relative_path maps to ~/.velikiy-moguchiy/models/<relative_path>/.koe-manifest.json
+macro_rules! manifest {
+    ($path:literal) => {
+        ($path, include_str!(concat!("manifests/", $path, ".json")))
+    };
+}
+const DEFAULT_MANIFESTS: &[(&str, &str)] = &[
+    manifest!("mlx/Qwen3-ASR-0.6B-4bit"),
+    manifest!("mlx/Qwen3-ASR-1.7B-4bit"),
+    manifest!("mlx/Qwen3-0.6B-4bit"),
+    manifest!("mlx/Qwen3-1.7B-4bit"),
+    manifest!("sherpa-onnx/bilingual-zh-en"),
+    manifest!("sherpa-onnx/multilingual-8lang"),
+    manifest!("sherpa-onnx/zh-xlarge"),
+    // Developer-only (see the wetype-offline feature): without it the manifest that
+    // would download the unlicensed WeType weights is not installed.
+    #[cfg(feature = "wetype-offline")]
+    manifest!("wetype/embed140m"),
+];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn removed_doubaoime_provider_reads_as_qwen() {
+        let asr: AsrSection = serde_yaml::from_str("provider: doubaoime\n").unwrap();
+        assert_eq!(asr.provider, "qwen");
+        let asr: AsrSection = serde_yaml::from_str("provider: doubao\n").unwrap();
+        assert_eq!(asr.provider, "doubao");
+        let asr: AsrSection = serde_yaml::from_str("{}").unwrap();
+        assert_eq!(asr.provider, "qwen");
+    }
+    use std::ffi::{OsStr, OsString};
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_config_path(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("velikiy-moguchiy-{name}-{nonce}.yaml"))
+    }
+
+    #[test]
+    fn default_template_declares_history_keys() {
+        let root: serde_yaml::Value = serde_yaml::from_str(DEFAULT_CONFIG_YAML).unwrap();
+        let history = root.get("history").expect("history section");
+        assert_eq!(history.get("save_recordings").unwrap().as_bool(), Some(true));
+        assert_eq!(
+            history.get("recordings_retention_days").unwrap().as_u64(),
+            Some(30)
+        );
+        assert_eq!(
+            history.get("auto_retry_on_error").unwrap().as_bool(),
+            Some(true)
+        );
+        serde_yaml::from_str::<Config>(DEFAULT_CONFIG_YAML).unwrap();
+    }
+
+    #[test]
+    fn default_template_declares_training_contribution_off() {
+        let root: serde_yaml::Value = serde_yaml::from_str(DEFAULT_CONFIG_YAML).unwrap();
+        let training = root.get("training").expect("training section");
+        assert_eq!(training.get("contribute").unwrap().as_bool(), Some(false));
+    }
+
+    #[test]
+    fn default_template_declares_lipdata_off_with_a_dir() {
+        let root: serde_yaml::Value = serde_yaml::from_str(DEFAULT_CONFIG_YAML).unwrap();
+        let lipdata = root.get("lipdata").expect("lipdata section");
+        assert_eq!(lipdata.get("capture_video").unwrap().as_bool(), Some(false));
+        assert_eq!(lipdata.get("dir").unwrap().as_str(), Some(""));
+    }
+
+    #[test]
+    fn atomic_write_file_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = temp_config_path("perm-check");
+        // Pre-existing file with loose permissions gets tightened on rewrite.
+        fs::write(&path, "a: 1\n").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+
+        atomic_write_file(&path, "a: 2\n").unwrap();
+
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "a: 2\n");
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn normalized_keys_invalid_trigger_falls_back_to_fn() {
+        let h = HotkeySection {
+            trigger_key: "nonexistent".into(),
+            cancel_key: "left_option".into(),
+            trigger_mode: "hold".into(),
+            translate_key: String::new(),
+            ask_key: String::new(),
+            abort_key: "escape".into(),
+            mode_key: String::new(),
+            edit_key: String::new(),
+            undo_key: String::new(),
+            repaste_key: String::new(),
+            lips_key: String::new(),
+            mouse_button: String::new(),
+        };
+        assert_eq!(h.normalized_trigger_key(), "fn");
+    }
+
+    #[test]
+    fn normalize_hotkey_config_normalizes_trigger_only() {
+        let path = temp_config_path("hotkey-config");
+        fs::write(&path, "hotkey:\n  trigger_key: 0x7A\n").unwrap();
+
+        let config = Config {
+            hotkey: HotkeySection {
+                trigger_key: "0x7A".into(),
+                cancel_key: "".into(),
+                trigger_mode: "hold".into(),
+                translate_key: String::new(),
+                ask_key: String::new(),
+                abort_key: "escape".into(),
+                mode_key: String::new(),
+                edit_key: String::new(),
+                undo_key: String::new(),
+                repaste_key: String::new(),
+                lips_key: String::new(),
+                mouse_button: String::new(),
+            },
+            ..Config::default()
+        };
+
+        let changed = normalize_hotkey_config(&path, &config).unwrap();
+        let output = fs::read_to_string(&path).unwrap();
+        let doc: serde_yaml::Value = serde_yaml::from_str(&output).unwrap();
+        let hotkey = doc.get("hotkey").and_then(|v| v.as_mapping()).unwrap();
+        let trigger = hotkey
+            .get(serde_yaml::Value::String("trigger_key".into()))
+            .and_then(|v| v.as_str())
+            .unwrap();
+
+        assert!(changed);
+        assert_eq!(trigger, "122");
+        assert!(!output.contains("cancel_key:"));
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn normalized_keys_canonicalize_combo() {
+        let h = HotkeySection {
+            trigger_key: "shift+cmd+49".into(),
+            cancel_key: "command+shift+49".into(),
+            trigger_mode: "hold".into(),
+            translate_key: String::new(),
+            ask_key: String::new(),
+            abort_key: "escape".into(),
+            mode_key: String::new(),
+            edit_key: String::new(),
+            undo_key: String::new(),
+            repaste_key: String::new(),
+            lips_key: String::new(),
+            mouse_button: String::new(),
+        };
+        assert_eq!(h.normalized_trigger_key(), "command+shift+49");
+    }
+
+    #[test]
+    fn resolve_combo_hotkey_uses_keydown_match_kind() {
+        let h = HotkeySection {
+            trigger_key: "cmd+shift+49".into(),
+            cancel_key: "option+53".into(),
+            trigger_mode: "hold".into(),
+            translate_key: String::new(),
+            ask_key: String::new(),
+            abort_key: "escape".into(),
+            mode_key: String::new(),
+            edit_key: String::new(),
+            undo_key: String::new(),
+            repaste_key: String::new(),
+            lips_key: String::new(),
+            mouse_button: String::new(),
+        };
+        let resolved = h.resolve();
+
+        assert_eq!(resolved.key_code, 49);
+        assert_eq!(resolved.alt_key_code, 0);
+        assert_eq!(resolved.modifier_flag, 0x0010_0000 | 0x0002_0000);
+        assert_eq!(resolved.match_kind, HotkeyMatchKind::KeyDown);
+    }
+
+    #[test]
+    fn abort_key_defaults_to_escape_and_can_be_disabled() {
+        let h = HotkeySection::default();
+        assert_eq!(h.abort_key, "escape");
+
+        let escape = HotkeySection::resolve_abort(&h.abort_key).unwrap();
+        assert_eq!(escape.key_code, 53);
+        assert_eq!(escape.modifier_flag, 0);
+        assert_eq!(escape.match_kind, HotkeyMatchKind::KeyDown);
+
+        assert_eq!(HotkeySection::resolve_abort("esc").unwrap().key_code, 53);
+        assert_eq!(HotkeySection::resolve_abort("122").unwrap().key_code, 122);
+        assert!(HotkeySection::resolve_abort("").is_none());
+
+        let disabled: HotkeySection = serde_yaml::from_str("abort_key: \"\"").unwrap();
+        assert!(HotkeySection::resolve_abort(&disabled.abort_key).is_none());
+    }
+
+    fn hotkeys(trigger: &str, translate: &str, ask: &str, abort: &str) -> HotkeySection {
+        HotkeySection {
+            trigger_key: trigger.into(),
+            cancel_key: String::new(),
+            trigger_mode: "hold".into(),
+            translate_key: translate.into(),
+            ask_key: ask.into(),
+            abort_key: abort.into(),
+            mode_key: String::new(),
+            edit_key: String::new(),
+            undo_key: String::new(),
+            repaste_key: String::new(),
+            lips_key: String::new(),
+            mouse_button: String::new(),
+        }
+    }
+
+    // The native monitor only applies its clean-tap rule (no other key or click
+    // while the trigger is held) to modifier-only keys.
+    #[test]
+    fn every_modifier_key_option_is_a_modifier_only_trigger() {
+        for key in [
+            "fn",
+            "left_option",
+            "right_option",
+            "left_command",
+            "right_command",
+            "left_control",
+            "right_control",
+        ] {
+            let h = hotkeys(key, "", "", "");
+            assert_eq!(h.resolve().match_kind, HotkeyMatchKind::ModifierOnly, "{key}");
+            let extra = HotkeySection::resolve_extra(key).unwrap();
+            assert_eq!(extra.match_kind, HotkeyMatchKind::ModifierOnly, "{key}");
+        }
+    }
+
+    #[test]
+    fn mode_key_is_validated_like_the_other_extra_keys() {
+        let mut h = hotkeys("right_command", "", "", "escape");
+        assert!(h.resolve_mode_key().is_none(), "off by default");
+
+        h.mode_key = "right_option".into();
+        let params = h.resolve_mode_key().unwrap();
+        assert_eq!(params.match_kind, HotkeyMatchKind::ModifierOnly);
+
+        for bad in ["f13", "banana", "ctrl+t", "70000"] {
+            h.mode_key = bad.into();
+            assert!(h.resolve_mode_key().is_none(), "{bad:?}");
+        }
+
+        h.mode_key = "right_command".into();
+        assert!(h.resolve_mode_key().is_none(), "same as the trigger");
+        h.translate_key = "left_option".into();
+        h.mode_key = "left_option".into();
+        assert!(h.resolve_mode_key().is_none(), "same as the translate key");
+        h.ask_key = "left_control".into();
+        h.mode_key = "left_control".into();
+        assert!(h.resolve_mode_key().is_none(), "same as the ask key");
+        h.mode_key = "53".into();
+        assert!(h.resolve_mode_key().is_none(), "same as the abort key");
+        h.mode_key = "122".into();
+        assert_eq!(h.resolve_mode_key().unwrap().key_code, 122);
+    }
+
+    #[test]
+    fn edit_undo_and_repaste_keys_default_off_and_are_validated_strictly() {
+        let defaults = HotkeySection::default();
+        assert_eq!(
+            (defaults.edit_key.as_str(), defaults.undo_key.as_str(), defaults.repaste_key.as_str()),
+            ("", "", "")
+        );
+        assert!(defaults.resolve_edit_key().is_none());
+        assert!(defaults.resolve_undo_key().is_none());
+        assert!(defaults.resolve_repaste_key().is_none());
+
+        let mut h = hotkeys("right_command", "", "", "escape");
+        h.edit_key = "left_control".into();
+        h.undo_key = "122".into();
+        h.repaste_key = "cmd+shift+49".into();
+        assert_eq!(h.resolve_edit_key().unwrap().key_code, 59);
+        assert_eq!(h.resolve_undo_key().unwrap().key_code, 122);
+        let repaste = h.resolve_repaste_key().unwrap();
+        assert_eq!((repaste.key_code, repaste.match_kind), (49, HotkeyMatchKind::KeyDown));
+
+        // A typo disables the key instead of turning it into Fn.
+        for bad in ["f13", "banana", "ctrl+t", "70000", "cmd+"] {
+            h.edit_key = bad.into();
+            h.undo_key = bad.into();
+            h.repaste_key = bad.into();
+            assert!(h.resolve_edit_key().is_none(), "edit {bad:?}");
+            assert!(h.resolve_undo_key().is_none(), "undo {bad:?}");
+            assert!(h.resolve_repaste_key().is_none(), "repaste {bad:?}");
+        }
+    }
+
+    #[test]
+    fn edit_undo_and_repaste_keys_must_differ_from_every_other_hotkey() {
+        let mut h = hotkeys("right_command", "right_option", "left_control", "escape");
+        h.mode_key = "left_command".into();
+        for clash in ["right_command", "right_option", "left_control", "53", "left_command"] {
+            h.edit_key = clash.into();
+            // "53" is Escape as a raw keycode, the abort key, KeyDown
+            assert!(h.resolve_edit_key().is_none(), "edit {clash:?}");
+        }
+        h.edit_key = "right_control".into();
+        assert!(h.resolve_edit_key().is_some());
+        h.undo_key = "right_control".into();
+        assert!(h.resolve_undo_key().is_none(), "undo equals edit");
+        h.undo_key = "fn".into();
+        assert!(h.resolve_undo_key().is_some());
+        h.repaste_key = "fn".into();
+        assert!(h.resolve_repaste_key().is_none(), "repaste equals undo");
+        h.repaste_key = "right_control".into();
+        assert!(h.resolve_repaste_key().is_none(), "repaste equals edit");
+        h.repaste_key = "123".into();
+        assert!(h.resolve_repaste_key().is_some());
+        let parsed: HotkeySection =
+            serde_yaml::from_str("edit_key: right_control\nundo_key: 122\n").unwrap();
+        assert_eq!(parsed.edit_key, "right_control");
+        assert_eq!(parsed.undo_key, "122");
+        assert_eq!(parsed.repaste_key, "");
+    }
+
+    #[test]
+    fn lips_key_defaults_off_and_must_differ_from_every_other_hotkey() {
+        assert!(HotkeySection::default().resolve_lips_key().is_none());
+        let mut h = hotkeys("right_command", "right_option", "left_control", "escape");
+        h.repaste_key = "cmd+shift+49".into();
+        for clash in ["right_command", "right_option", "left_control", "53", "cmd+shift+49"] {
+            h.lips_key = clash.into();
+            assert!(h.resolve_lips_key().is_none(), "lips {clash:?}");
+        }
+        h.lips_key = "banana".into();
+        assert!(h.resolve_lips_key().is_none());
+        h.lips_key = "right_control".into();
+        assert!(h.resolve_lips_key().is_some());
+        h.lips_key = "fn".into();
+        assert_eq!(h.resolve_lips_key().unwrap().key_code, 63);
+    }
+
+    #[test]
+    fn default_template_declares_lips_off() {
+        let root: serde_yaml::Value = serde_yaml::from_str(DEFAULT_CONFIG_YAML).unwrap();
+        let flag = root.get("experimental").and_then(|e| e.get("lips"));
+        assert_eq!(flag.and_then(|v| v.as_bool()), Some(false));
+        assert_eq!(root["hotkey"]["lips_key"].as_str(), Some(""));
+        assert_eq!(root["lips"]["port"].as_u64(), Some(8766));
+    }
+
+    #[test]
+    fn mouse_button_accepts_only_middle_and_the_side_buttons() {
+        let button = |value: &str| {
+            let mut h = HotkeySection::default();
+            h.mouse_button = value.into();
+            h.resolve_mouse_button()
+        };
+        assert_eq!(button(""), 0);
+        assert_eq!(button("0"), 0);
+        assert_eq!(button("3"), 3);
+        assert_eq!(button("4"), 4);
+        assert_eq!(button(" 5 "), 5);
+        assert_eq!(button("middle"), 3);
+        for bad in ["1", "2", "6", "-1", "left", "99"] {
+            assert_eq!(button(bad), 0, "{bad:?}");
+        }
+        let parsed: HotkeySection = serde_yaml::from_str("mouse_button: 4").unwrap();
+        assert_eq!(parsed.resolve_mouse_button(), 4);
+    }
+
+    #[test]
+    fn voice_features_default_sensibly() {
+        let config = Config::default();
+        assert!(config.commands.enabled);
+        assert!(config.snippets.is_empty());
+        assert_eq!(config.recording.silence_timeout_s(), 0.0);
+        assert_eq!(config.hotkey.mode_key, "");
+        assert_eq!(config.hotkey.resolve_mouse_button(), 0);
+
+        let parsed: Config = serde_yaml::from_str(
+            "commands:\n  enabled: false\nsnippets:\n  - trigger: мой имейл\n    text: a@b.c\nrecording:\n  auto_stop_silence_s: 3\n",
+        )
+        .unwrap();
+        assert!(!parsed.commands.enabled);
+        assert_eq!(parsed.snippets.len(), 1);
+        assert_eq!(parsed.snippets[0].text, "a@b.c");
+        assert_eq!(parsed.recording.silence_timeout_s(), 3.0);
+
+        for (value, expected) in [(0.0, 0.0), (0.5, 0.0), (2.0, 2.0), (8.0, 8.0), (61.0, 0.0), (f64::NAN, 0.0)] {
+            let r = RecordingSection { auto_stop_silence_s: value };
+            assert_eq!(r.silence_timeout_s(), expected, "{value}");
+        }
+    }
+
+    #[test]
+    fn default_template_declares_the_voice_feature_keys() {
+        let root: serde_yaml::Value = serde_yaml::from_str(DEFAULT_CONFIG_YAML).unwrap();
+        assert_eq!(root["commands"]["enabled"].as_bool(), Some(true));
+        assert_eq!(root["recording"]["auto_stop_silence_s"].as_u64(), Some(0));
+        assert_eq!(root["hotkey"]["mode_key"].as_str(), Some(""));
+        for key in ["edit_key", "undo_key", "repaste_key"] {
+            assert_eq!(root["hotkey"][key].as_str(), Some(""), "{key}");
+        }
+        assert_eq!(root["hotkey"]["mouse_button"].as_u64(), Some(0));
+        assert!(root["snippets"].as_sequence().unwrap().is_empty());
+    }
+
+    #[test]
+    fn unknown_extra_keys_disable_the_hotkey_instead_of_becoming_fn() {
+        for bad in ["ctrl+t", "f13", "f13 ", "banana", "cmd+", "+49", "shift+cmd", "70000"] {
+            assert!(
+                HotkeySection::resolve_extra(bad).is_none(),
+                "{bad:?} must not resolve"
+            );
+            let h = hotkeys("right_command", bad, bad, "escape");
+            assert!(h.resolve_translate().is_none(), "translate {bad:?}");
+            assert!(h.resolve_ask().is_none(), "ask {bad:?}");
+        }
+        assert!(HotkeySection::resolve_extra("").is_none());
+        assert!(HotkeySection::resolve_extra("   ").is_none());
+    }
+
+    #[test]
+    fn valid_extra_keys_resolve() {
+        let h = hotkeys("right_command", "right_option", "cmd+shift+49", "esc");
+        assert_eq!(h.resolve_translate().unwrap().key_code, 61);
+        let ask = h.resolve_ask().unwrap();
+        assert_eq!((ask.key_code, ask.match_kind), (49, HotkeyMatchKind::KeyDown));
+        assert_eq!(h.resolve_abort_key().unwrap().key_code, 53);
+        // names are case/space tolerant
+        assert_eq!(HotkeySection::resolve_extra(" Right_Option ").unwrap().key_code, 61);
+        assert_eq!(HotkeySection::resolve_extra("0x7A").unwrap().key_code, 122);
+    }
+
+    #[test]
+    fn extra_key_equal_to_trigger_is_refused() {
+        let h = hotkeys("right_command", "right_command", "54", "right_command");
+        assert!(h.resolve_translate().is_none());
+        // raw 54 is KeyDown while right_command is modifier-only: different match kind
+        assert!(h.resolve_ask().is_some());
+        assert!(h.resolve_abort_key().is_none());
+
+        let fn_trigger = hotkeys("fn", "fn", "", "escape");
+        assert!(fn_trigger.resolve_translate().is_none());
+    }
+
+    #[test]
+    fn ask_key_equal_to_translate_key_is_refused() {
+        let h = hotkeys("fn", "right_option", "right_option", "escape");
+        assert!(h.resolve_translate().is_some());
+        assert!(h.resolve_ask().is_none());
+    }
+
+    #[test]
+    fn invalid_abort_key_is_disabled() {
+        assert!(HotkeySection::resolve_abort("escpae").is_none());
+        let h = hotkeys("fn", "", "", "escpae");
+        assert!(h.resolve_abort_key().is_none());
+    }
+
+    #[test]
+    fn config_flag_spellings_match_the_objc_side() {
+        for on in ["true", "True", " 1 ", "yes", "ON"] {
+            assert!(is_truthy(on), "{on:?}");
+        }
+        for off in ["", "false", "0", "no", "off", "maybe"] {
+            assert!(!is_truthy(off), "{off:?}");
+        }
+    }
+
+    #[test]
+    fn config_default_includes_russian_templates() {
+        let config = Config::default();
+        assert_eq!(config.prompt_templates, default_prompt_templates());
+        assert!(config.llm.auto_paste_processed_text);
+        assert_eq!(config.overlay.font_family, "system");
+        assert_eq!(config.overlay.font_size, 13);
+        assert_eq!(config.overlay.bottom_margin, 10);
+        assert!(config.overlay.limit_visible_lines);
+        assert_eq!(config.overlay.max_visible_lines, 3);
+    }
+
+    #[test]
+    fn normalize_prompt_templates_config_replaces_legacy_defaults() {
+        let path = temp_config_path("prompt-templates");
+        let mut doc = serde_yaml::Mapping::new();
+        doc.insert(
+            serde_yaml::Value::String("prompt_templates".into()),
+            serde_yaml::to_value(legacy_default_prompt_templates()).unwrap(),
+        );
+        fs::write(
+            &path,
+            serde_yaml::to_string(&serde_yaml::Value::Mapping(doc)).unwrap(),
+        )
+        .unwrap();
+
+        let config = Config {
+            prompt_templates: legacy_default_prompt_templates(),
+            ..Config::default()
+        };
+
+        let changed = normalize_prompt_templates_config(&path, &config).unwrap();
+        let output = fs::read_to_string(&path).unwrap();
+        let doc: serde_yaml::Value = serde_yaml::from_str(&output).unwrap();
+        let stored_templates: Vec<PromptTemplate> =
+            serde_yaml::from_value(doc.get("prompt_templates").cloned().unwrap()).unwrap();
+
+        assert!(changed);
+        assert_eq!(stored_templates, default_prompt_templates());
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn default_llm_config_includes_all_remote_protocols_and_local_profiles() {
+        let llm = LlmSection::default();
+
+        assert_eq!(llm.active_profile, "openai");
+        assert!(llm.profiles.contains_key("openai"));
+        assert!(llm.profiles.contains_key("openai-responses"));
+        assert!(llm.profiles.contains_key("anthropic"));
+        assert!(llm.profiles.contains_key("apfel"));
+        assert!(llm.profiles.contains_key("mlx"));
+
+        let apfel = llm.profiles.get("apfel").unwrap();
+        assert_eq!(apfel.provider, "apfel");
+        assert_eq!(apfel.base_url, "http://127.0.0.1:11434/v1");
+        assert_eq!(apfel.api_key, "");
+        assert_eq!(apfel.model, "apple-foundationmodel");
+        assert_eq!(apfel.endpoint_path, "/chat/completions");
+        assert_eq!(apfel.api_protocol, LlmApiProtocol::OpenaiChat);
+        assert!(matches!(
+            apfel.max_token_parameter,
+            LlmMaxTokenParameter::MaxTokens
+        ));
+        assert!(matches!(
+            apfel.no_reasoning_control,
+            LlmNoReasoningControl::None
+        ));
+    }
+
+    #[test]
+    fn active_profile_config_resolves_apfel_profile() {
+        let llm = LlmSection {
+            active_profile: "apfel".into(),
+            ..LlmSection::default()
+        };
+
+        let active = llm.active_profile_config().unwrap();
+
+        assert_eq!(active.id, "apfel");
+        assert_eq!(active.provider, "apfel");
+        assert_eq!(active.base_url, "http://127.0.0.1:11434/v1");
+        assert_eq!(active.api_key, "");
+        assert_eq!(active.model, "apple-foundationmodel");
+        assert_eq!(active.endpoint_path, "/chat/completions");
+        assert_eq!(active.effective_api_protocol(), LlmApiProtocol::OpenaiChat);
+        assert!(active.is_ready());
+    }
+
+    #[test]
+    fn legacy_profile_defaults_to_chat_and_accepts_legacy_path_key() {
+        let profile: LlmProfileRuntimeConfig = serde_json::from_value(serde_json::json!({
+            "id": "openai",
+            "name": "OpenAI",
+            "provider": "openai",
+            "base_url": "https://api.openai.com/v1",
+            "api_key": "",
+            "model": "gpt-5.4-nano",
+            "chat_completions_path": "/custom/chat",
+            "max_token_parameter": "max_completion_tokens",
+            "no_reasoning_control": "reasoning_effort",
+            "mlx": {"model": "mlx/Qwen3-0.6B-4bit"}
+        }))
+        .unwrap();
+
+        assert_eq!(profile.effective_api_protocol(), LlmApiProtocol::OpenaiChat);
+        assert_eq!(profile.effective_endpoint_path(), "/custom/chat");
+    }
+
+    #[test]
+    fn empty_endpoint_uses_each_protocol_default() {
+        for (protocol, expected) in [
+            (LlmApiProtocol::OpenaiChat, "/chat/completions"),
+            (LlmApiProtocol::OpenaiResponses, "/responses"),
+            (LlmApiProtocol::AnthropicMessages, "/messages"),
+        ] {
+            let profile = LlmProfileRuntimeConfig {
+                id: "test".into(),
+                name: "Test".into(),
+                provider: "openai".into(),
+                api_protocol: protocol,
+                base_url: "https://example.com/v1".into(),
+                api_key: String::new(),
+                model: "model".into(),
+                endpoint_path: String::new(),
+                max_token_parameter: LlmMaxTokenParameter::MaxCompletionTokens,
+                no_reasoning_control: LlmNoReasoningControl::None,
+                mlx: Default::default(),
+            };
+            assert_eq!(profile.effective_endpoint_path(), expected);
+        }
+    }
+
+    #[test]
+    fn mlx_profile_requires_model() {
+        let mut llm = LlmSection {
+            active_profile: "mlx".into(),
+            ..LlmSection::default()
+        };
+        let active = llm.active_profile_config().unwrap();
+        assert!(active.is_ready());
+
+        llm.profiles.get_mut("mlx").unwrap().mlx.model.clear();
+        let active = llm.active_profile_config().unwrap();
+        assert!(!active.is_ready());
+    }
+
+    // Environment variables are process-global, so every test that mutates one
+    // shares this lock for its full duration. Poison-tolerant so one failing
+    // test does not cascade into the others.
+    static PROCESS_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct EnvVarGuard {
+        key: &'static str,
+        original: Option<OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn new(key: &'static str) -> Self {
+            Self {
+                key,
+                original: std::env::var_os(key),
+            }
+        }
+
+        fn set(&self, value: impl AsRef<OsStr>) {
+            // SAFETY: process-global environment mutation is serialized by
+            // PROCESS_ENV_LOCK in every test that creates this guard.
+            unsafe { std::env::set_var(self.key, value) };
+        }
+
+        fn remove(&self) {
+            // SAFETY: see set().
+            unsafe { std::env::remove_var(self.key) };
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            // SAFETY: the lock guard outlives this value in each test, so the
+            // original value is restored while mutation remains serialized.
+            unsafe {
+                match &self.original {
+                    Some(value) => std::env::set_var(self.key, value),
+                    None => std::env::remove_var(self.key),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn config_set_error_and_success() {
+        let _env_lock = PROCESS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = EnvVarGuard::new("HOME");
+
+        // --- corrupted YAML should fail ---
+        let tmp1 = std::env::temp_dir().join(format!(
+            "velikiy-moguchiy-test-bad-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let app_dir1 = tmp1.join(velikiy_moguchiy_asr::app_dir::DIR_NAME);
+        fs::create_dir_all(&app_dir1).unwrap();
+        fs::write(app_dir1.join("config.yaml"), "{{{{invalid yaml").unwrap();
+
+        home.set(&tmp1);
+        let bad_result = config_set("test.key", "value");
+        let _ = fs::remove_dir_all(&tmp1);
+        assert!(
+            bad_result.is_err(),
+            "config_set should fail on corrupted YAML"
+        );
+
+        // --- valid YAML should succeed ---
+        let tmp2 = std::env::temp_dir().join(format!(
+            "velikiy-moguchiy-test-ok-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let app_dir2 = tmp2.join(velikiy_moguchiy_asr::app_dir::DIR_NAME);
+        fs::create_dir_all(&app_dir2).unwrap();
+        fs::write(app_dir2.join("config.yaml"), "asr:\n  provider: doubao\n").unwrap();
+
+        home.set(&tmp2);
+        let ok_result = config_set("llm.enabled", "true");
+
+        assert!(ok_result.is_ok(), "config_set should succeed on valid YAML");
+        let content = fs::read_to_string(app_dir2.join("config.yaml")).unwrap();
+        assert!(content.contains("enabled: true"));
+        let _ = fs::remove_dir_all(&tmp2);
+    }
+
+    // ─── substitute_env_vars tests ────────────────────────────────────
+
+    #[test]
+    fn substitute_env_vars_replaces_known_var() {
+        let _env_lock = PROCESS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let variable = EnvVarGuard::new("VELIKIY_MOGUCHIY_TEST_API_KEY");
+        variable.set("sk-test-123");
+        let result = substitute_env_vars("api_key: ${VELIKIY_MOGUCHIY_TEST_API_KEY}");
+        assert_eq!(result, "api_key: sk-test-123");
+    }
+
+    #[test]
+    fn substitute_env_vars_no_rescan_prevents_infinite_loop() {
+        let _env_lock = PROCESS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let variable = EnvVarGuard::new("VELIKIY_MOGUCHIY_TEST_SELF_REF");
+        // If the value itself contains "${...}", it must NOT be re-expanded.
+        variable.set("${VELIKIY_MOGUCHIY_TEST_SELF_REF}");
+        // Should return quickly and produce the literal value, not loop forever.
+        let result = substitute_env_vars("key: ${VELIKIY_MOGUCHIY_TEST_SELF_REF}");
+        assert_eq!(result, "key: ${VELIKIY_MOGUCHIY_TEST_SELF_REF}");
+    }
+
+    #[test]
+    fn substitute_env_vars_value_with_dollar_brace_not_re_expanded() {
+        let _env_lock = PROCESS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let inner = EnvVarGuard::new("VELIKIY_MOGUCHIY_TEST_INNER");
+        let outer = EnvVarGuard::new("VELIKIY_MOGUCHIY_TEST_OUTER");
+        // A value that contains a different ${VAR} reference must not be resolved.
+        inner.set("hello");
+        outer.set("${VELIKIY_MOGUCHIY_TEST_INNER}");
+        let result = substitute_env_vars("v: ${VELIKIY_MOGUCHIY_TEST_OUTER}");
+        // Should equal the literal value of OUTER, not the expanded inner.
+        assert_eq!(result, "v: ${VELIKIY_MOGUCHIY_TEST_INNER}");
+    }
+
+    #[test]
+    fn substitute_env_vars_missing_var_becomes_empty() {
+        let _env_lock = PROCESS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let variable = EnvVarGuard::new("VELIKIY_MOGUCHIY_TEST_MISSING_VAR_XYZ");
+        // Ensure an unset var is replaced with ""
+        variable.remove();
+        let result = substitute_env_vars("key: ${VELIKIY_MOGUCHIY_TEST_MISSING_VAR_XYZ}");
+        assert_eq!(result, "key: ");
+    }
+
+    #[test]
+    fn substitute_env_vars_no_closing_brace_left_verbatim() {
+        let result = substitute_env_vars("key: ${UNCLOSED");
+        assert_eq!(result, "key: ${UNCLOSED");
+    }
+
+    #[test]
+    fn substitute_env_vars_multiple_vars_in_one_string() {
+        let _env_lock = PROCESS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let host = EnvVarGuard::new("VELIKIY_MOGUCHIY_TEST_HOST");
+        let port = EnvVarGuard::new("VELIKIY_MOGUCHIY_TEST_PORT");
+        host.set("localhost");
+        port.set("8080");
+        let result = substitute_env_vars(
+            "url: http://${VELIKIY_MOGUCHIY_TEST_HOST}:${VELIKIY_MOGUCHIY_TEST_PORT}/v1",
+        );
+        assert_eq!(result, "url: http://localhost:8080/v1");
+    }
+
+    // Mutates HOME; serialized with every other environment-mutating test.
+    #[test]
+    fn config_bool_round_trip_and_isolation() {
+        let _env_lock = PROCESS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let home = EnvVarGuard::new("HOME");
+
+        let tmp = std::env::temp_dir().join(format!(
+            "velikiy-moguchiy-test-bool-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        // A data directory from before the rename is still read and written.
+        let app_dir = tmp.join(velikiy_moguchiy_asr::app_dir::LEGACY_DIR_NAME);
+        fs::create_dir_all(&app_dir).unwrap();
+        fs::write(app_dir.join("config.yaml"), "").unwrap();
+
+        home.set(&tmp);
+
+        // Write two bool keys.
+        config_set("asr.doubao.enable_accelerate_text", "true").unwrap();
+        config_set("llm.prompt_templates_enabled", "true").unwrap();
+
+        // Both round-trip as the exact string "true".
+        assert_eq!(
+            config_get("asr.doubao.enable_accelerate_text").unwrap(),
+            "true",
+            "asr.doubao.enable_accelerate_text should be \"true\""
+        );
+        assert_eq!(
+            config_get("llm.prompt_templates_enabled").unwrap(),
+            "true",
+            "llm.prompt_templates_enabled should be \"true\""
+        );
+
+        // Setting an unrelated third key must not clobber the first two.
+        config_set("asr.provider", "doubao").unwrap();
+
+        assert_eq!(
+            config_get("asr.doubao.enable_accelerate_text").unwrap(),
+            "true",
+            "asr.doubao.enable_accelerate_text should still be \"true\" after sibling write"
+        );
+        assert_eq!(
+            config_get("llm.prompt_templates_enabled").unwrap(),
+            "true",
+            "llm.prompt_templates_enabled should still be \"true\" after sibling write"
+        );
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    // ─── Clipboard Section ──────────────────────────────────────────
+
+    fn clipboard_delay_from_yaml(yaml: &str) -> u32 {
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        config.clipboard.restore_delay_ms
+    }
+
+    #[test]
+    fn clipboard_defaults_when_section_absent() {
+        assert_eq!(clipboard_delay_from_yaml("{}"), 1500);
+        assert_eq!(Config::default().clipboard.restore_delay_ms, 1500);
+    }
+
+    #[test]
+    fn clipboard_defaults_when_field_absent_or_null() {
+        assert_eq!(clipboard_delay_from_yaml("clipboard: {}"), 1500);
+        assert_eq!(clipboard_delay_from_yaml("clipboard:\n"), 1500);
+        assert_eq!(
+            clipboard_delay_from_yaml("clipboard:\n  restore_delay_ms:\n"),
+            1500
+        );
+    }
+
+    #[test]
+    fn clipboard_accepts_valid_range() {
+        assert_eq!(
+            clipboard_delay_from_yaml("clipboard:\n  restore_delay_ms: 0"),
+            0
+        );
+        assert_eq!(
+            clipboard_delay_from_yaml("clipboard:\n  restore_delay_ms: 1500"),
+            1500
+        );
+        assert_eq!(
+            clipboard_delay_from_yaml("clipboard:\n  restore_delay_ms: 60000"),
+            60000
+        );
+    }
+
+    #[test]
+    fn clipboard_invalid_values_fall_back_to_default() {
+        for invalid in [
+            "-1",
+            "1.5",
+            "\"fast\"",
+            "true",
+            "60001",
+            "99999999999999999999999999", // overflows any integer type
+            "[1500]",
+        ] {
+            assert_eq!(
+                clipboard_delay_from_yaml(&format!("clipboard:\n  restore_delay_ms: {invalid}")),
+                1500,
+                "restore_delay_ms {invalid} should fall back to the default"
+            );
+        }
+    }
+
+    #[test]
+    fn clipboard_section_with_invalid_shape_falls_back() {
+        assert_eq!(clipboard_delay_from_yaml("clipboard: fast"), 1500);
+        assert_eq!(clipboard_delay_from_yaml("clipboard: 1500"), 1500);
+    }
+
+    #[test]
+    fn clipboard_invalid_value_preserves_unrelated_sections() {
+        let yaml = r#"
+asr:
+  provider: "qwen"
+llm:
+  timeout_ms: 1234
+clipboard:
+  restore_delay_ms: "not-a-number"
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.clipboard.restore_delay_ms, 1500);
+        assert_eq!(config.asr.provider, "qwen");
+        assert_eq!(config.llm.timeout_ms, 1234);
+    }
+
+    fn qwen_from_yaml(body: &str) -> QwenAsrConfig {
+        let yaml = format!("asr:\n  qwen:\n{body}");
+        serde_yaml::from_str::<Config>(&yaml).unwrap().asr.qwen
+    }
+
+    #[test]
+    fn qwen_keys_prefer_the_list_and_fall_back_to_the_single_key() {
+        let both = qwen_from_yaml("    api_key: sk-one\n    api_keys: [' sk-a ', '', sk-b]\n");
+        assert_eq!(both.effective_api_keys(), ["sk-a", "sk-b"]);
+        let single = qwen_from_yaml("    api_key: sk-one\n");
+        assert_eq!(single.effective_api_keys(), ["sk-one"]);
+        let empty_list = qwen_from_yaml("    api_key: sk-one\n    api_keys: []\n");
+        assert_eq!(empty_list.effective_api_keys(), ["sk-one"]);
+        assert!(qwen_from_yaml("    model: m\n").effective_api_keys().is_empty());
+    }
+
+    #[test]
+    fn qwen_model_defaults_to_omni_and_keeps_the_users_choice() {
+        let omni = "qwen3.8-omni-flash-realtime";
+        assert_eq!(QwenAsrConfig::default().model, omni);
+        assert_eq!(qwen_from_yaml("    language: ru\n").model, omni);
+        assert_eq!(
+            qwen_from_yaml("    model: qwen3-asr-flash-realtime\n").model,
+            "qwen3-asr-flash-realtime"
+        );
+    }
+
+    #[test]
+    fn qwen_app_modes_and_field_context_defaults() {
+        let plain = qwen_from_yaml("    model: m\n");
+        assert!(plain.app_modes.is_empty());
+        assert!(plain.use_field_context);
+        let set = qwen_from_yaml(
+            "    app_modes:\n      com.apple.Notes: light\n    use_field_context: false\n",
+        );
+        assert_eq!(set.app_modes["com.apple.Notes"], "light");
+        assert!(!set.use_field_context);
+    }
+}

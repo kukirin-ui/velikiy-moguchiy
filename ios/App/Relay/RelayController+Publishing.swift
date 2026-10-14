@@ -1,0 +1,62 @@
+import AVFoundation
+import Combine
+import Foundation
+import UIKit
+
+extension RelayController {
+  func publish(
+    _ status: RelayStatus,
+    message: String,
+    offlineReason: RelayOfflineReason? = nil,
+    activeRequestID: String? = nil,
+    activeDictationAction: RelayDictationAction? = nil,
+    recordingStartedAt: Date? = nil
+  ) {
+    setLocalStatus(status, message: message)
+    if status != .recording {
+      audioLevel = 0
+    }
+    store.publishStatus(
+      status,
+      message: message,
+      offlineReason: offlineReason,
+      activeRequestID: activeRequestID,
+      activeDictationAction: activeDictationAction,
+      recordingStartedAt: recordingStartedAt
+    )
+    if status == .idle, pendingLaunchRequest != nil {
+      preparePendingLaunchHandoffIfNeeded()
+    }
+    syncLiveActivity()
+    updatePollIntervalIfNeeded()
+  }
+
+  func publishUnavailable(
+    message: String,
+    offlineReason: RelayOfflineReason = .unavailable
+  ) {
+    idleShutdownWorkItem?.cancel()
+    idleShutdownWorkItem = nil
+    idleShutdownDeadline = nil
+    setLocalStatus(.error, message: message)
+    store.publishStatus(.offline, message: message, offlineReason: offlineReason)
+    relaySessionID = nil
+  }
+
+  func discardPendingLaunchRequest() {
+    cancelAutomaticReturnToKeyboard()
+    if let pendingLaunchRequest {
+      store.clearLaunchAuthorization(for: pendingLaunchRequest.requestID)
+    }
+    pendingLaunchRequest = nil
+    isKeyboardHandoffActive = false
+    requiresManualKeyboardReturn = false
+    scheduleIdleShutdownIfEligible()
+  }
+
+  func setLocalStatus(_ status: RelayStatus, message: String) {
+    self.status = status
+    self.statusMessage = message
+    if status == .error { failNoteCapture(message) }
+  }
+}

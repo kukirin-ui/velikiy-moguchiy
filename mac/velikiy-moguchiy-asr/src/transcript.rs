@@ -1,0 +1,221 @@
+/// Whether a transcript carries no speech: empty, whitespace or punctuation only.
+/// Used to tell a silent recording from a spoken one when a model might answer
+/// the silence anyway.
+pub fn is_silent_transcript(text: &str) -> bool {
+    !text.chars().any(char::is_alphanumeric)
+}
+
+/// Aggregates ASR interim, definite, and final results into a single final transcript.
+/// Also collects interim revision history to help identify uncertain segments.
+pub struct TranscriptAggregator {
+    interim_text: String,
+    definite_text: String,
+    final_text: String,
+    has_final: bool,
+    interim_history: Vec<String>,
+}
+
+impl TranscriptAggregator {
+    pub fn new() -> Self {
+        Self {
+            interim_text: String::new(),
+            definite_text: String::new(),
+            final_text: String::new(),
+            has_final: false,
+            interim_history: Vec::new(),
+        }
+    }
+
+    /// Update with an interim result (replaces previous interim).
+    pub fn update_interim(&mut self, text: &str) {
+        if !text.is_empty() {
+            if self.interim_history.last().map(|s| s.as_str()) != Some(text) {
+                self.interim_history.push(text.to_string());
+                // Keep the tail; only the last ~10 entries are ever consumed
+                // (see interim_history()), so bounding at 64 is generous and
+                // prevents unbounded growth during very long dictation sessions.
+                const MAX_HISTORY: usize = 64;
+                if self.interim_history.len() > MAX_HISTORY {
+                    let drop = self.interim_history.len() - MAX_HISTORY;
+                    self.interim_history.drain(..drop);
+                }
+            }
+            self.interim_text = text.to_string();
+        }
+    }
+
+    /// Live preview that combines the committed text view with the
+    /// in-progress interim. After a pause, providers like DoubaoIME emit
+    /// `Interim` events containing only the new segment, so showing
+    /// `interim_text` alone would hide previously-finalized sentences. Merge
+    /// them with the same overlap-trimming logic used for final segments.
+    pub fn live_preview(&self) -> String {
+        let committed_text = self.committed_text();
+
+        if committed_text.is_empty() {
+            return self.interim_text.clone();
+        }
+        if self.interim_text.is_empty() {
+            return committed_text;
+        }
+        if self.interim_text.starts_with(&committed_text) {
+            return self.interim_text.clone();
+        }
+        if committed_text.starts_with(&self.interim_text) {
+            return committed_text;
+        }
+        let overlap = longest_overlap(&committed_text, &self.interim_text);
+        let mut out = committed_text;
+        out.push_str(&self.interim_text[overlap..]);
+        out
+    }
+
+    /// Committed text view: the third-pass `final_text` extended by any
+    /// second-pass `definite_text` that reaches beyond it, merged at read
+    /// time. `final_text` itself is never contaminated by second-pass output:
+    /// second- and third-pass text can differ mid-string, and baking a
+    /// definite into `final_text` would defeat the wholesale-replace path of
+    /// `merge_committed_text` for the next cumulative final, duplicating
+    /// content in the delivered transcript via the overlap fallback.
+    fn committed_text(&self) -> String {
+        if self.final_text.is_empty() {
+            return self.definite_text.clone();
+        }
+        if self.definite_text.is_empty() {
+            return self.final_text.clone();
+        }
+        let mut out = self.final_text.clone();
+        merge_committed_text(&mut out, &self.definite_text);
+        out
+    }
+
+    /// Update with a definite result from two-pass recognition.
+    ///
+    /// A definite result is stable enough for preview and delivery purposes
+    /// even if it is not the session's terminal `Final`. It is kept separate
+    /// from `final_text` and merged into the committed view at read time
+    /// (see `committed_text`) so later confirmed segments are not hidden
+    /// behind an earlier final segment.
+    pub fn update_definite(&mut self, text: &str) {
+        if !text.is_empty() {
+            self.definite_text = text.to_string();
+            if !self.has_final {
+                // The definite supersedes the interim it confirms; the next
+                // segment's interim re-arrives immediately.
+                self.interim_text.clear();
+            }
+            log::info!("definite segment confirmed: {} chars", text.len());
+        }
+    }
+
+    /// Update with a final result.
+    ///
+    /// Providers like DoubaoIME have ambiguous `Final` semantics: within a
+    /// single utterance `Final` is the best full transcript so far, but after
+    /// a speech pause the server starts a new segment and may either send only
+    /// the new content or replay earlier content. Neither pure replace nor
+    /// pure append is correct — we merge by prefix / suffix-overlap instead.
+    pub fn update_final(&mut self, text: &str) {
+        self.has_final = true;
+        if text.is_empty() {
+            return;
+        }
+        merge_committed_text(&mut self.final_text, text);
+        // The final supersedes the definite that preceded it; drop it so a
+        // divergent second-pass leftover cannot distort the committed view.
+        self.definite_text.clear();
+        // The segment this interim was tracking is now finalized; clear it so
+        // the next segment's live preview starts clean.
+        self.interim_text.clear();
+    }
+
+    /// Get the best available text.
+    /// Priority: committed (final extended by definite) > interim.
+    pub fn best_text(&self) -> String {
+        let committed = self.committed_text();
+        if !committed.is_empty() {
+            committed
+        } else {
+            self.interim_text.clone()
+        }
+    }
+
+    pub fn has_final_result(&self) -> bool {
+        self.has_final
+    }
+
+    pub fn has_any_text(&self) -> bool {
+        !self.final_text.is_empty()
+            || !self.definite_text.is_empty()
+            || !self.interim_text.is_empty()
+    }
+
+    /// Return the interim revision history.
+    /// Keeps only the last `max_entries` to avoid bloating prompts.
+    pub fn interim_history(&self, max_entries: usize) -> &[String] {
+        let len = self.interim_history.len();
+        if len <= max_entries {
+            &self.interim_history
+        } else {
+            &self.interim_history[len - max_entries..]
+        }
+    }
+}
+
+impl Default for TranscriptAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn merge_committed_text(committed: &mut String, text: &str) {
+    if committed.is_empty() {
+        *committed = text.to_string();
+    } else if text.starts_with(committed.as_str()) {
+        // New result is a refreshed full transcript of the same utterance.
+        *committed = text.to_string();
+    } else if committed.starts_with(text) {
+        // Stale replay of earlier content — ignore.
+        return;
+    } else {
+        // New segment: strip the longest overlap between the existing tail
+        // and the incoming head so we don't duplicate boundary characters.
+        let overlap = longest_overlap(committed, text);
+        committed.push_str(&text[overlap..]);
+    }
+}
+
+/// Longest k such that `tail.ends_with(&head[..k])`, aligned to char boundaries.
+fn longest_overlap(tail: &str, head: &str) -> usize {
+    let max = tail.len().min(head.len());
+    let mut k = max;
+    while k > 0 {
+        if head.is_char_boundary(k)
+            && tail.is_char_boundary(tail.len() - k)
+            && tail.as_bytes()[tail.len() - k..] == head.as_bytes()[..k]
+        {
+            return k;
+        }
+        k -= 1;
+    }
+    0
+}
+
+#[cfg(test)]
+mod silence_tests {
+    use super::is_silent_transcript;
+
+    #[test]
+    fn empty_whitespace_and_punctuation_are_silent() {
+        for text in ["", "   ", "\n\t", ".", "...", " — ", "?!", "«»"] {
+            assert!(is_silent_transcript(text), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn any_letter_or_digit_is_speech() {
+        for text in ["да", "Да.", "ok", "5", " ... а ... ", "ё"] {
+            assert!(!is_silent_transcript(text), "{text:?}");
+        }
+    }
+}

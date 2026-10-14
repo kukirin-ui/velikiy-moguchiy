@@ -1,0 +1,129 @@
+name: VelikiyMoguchiy
+options:
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  defaultConfig: Release
+
+# The bundle identifier comes from Config/Base.xcconfig; put your own in the
+# git-ignored Config/Secrets.xcconfig (see Config/Secrets.xcconfig.example).
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+
+packages:
+  AppleSpeechBridge:
+    path: ../Packages/AppleSpeechBridge
+
+settings:
+  base:
+    PRODUCT_BUNDLE_IDENTIFIER: "$(MAC_APP_BUNDLE_IDENTIFIER)"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    ENABLE_HARDENED_RUNTIME: YES
+
+targetTemplates:
+  MacApp:
+    type: application
+    platform: macOS
+    sources:
+      - path: VelikiyMoguchiy
+        excludes:
+          - "*.entitlements"
+          - "**/*Tests.m"
+    settings:
+      base:
+        INFOPLIST_FILE: VelikiyMoguchiy/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_ENTITLEMENTS: VelikiyMoguchiy/VelikiyMoguchiy.entitlements
+        PRODUCT_NAME: VelikiyMoguchiy
+        HEADER_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(SRCROOT)/../velikiy-moguchiy-core/target"
+        LIBRARY_SEARCH_PATHS:
+          - "$(inherited)"
+          - "$(SRCROOT)/../target/release"
+        OTHER_LDFLAGS:
+          - "-lvelikiy_moguchiy_core"
+          - "-lc++"
+          - "-lSystem"
+          - "-lresolv"
+          - "-framework Security"
+          - "-framework CoreFoundation"
+          - "-framework UserNotifications"
+          - "-framework SystemConfiguration"
+        ENABLE_APP_SANDBOX: NO
+        CLANG_ENABLE_OBJC_ARC: YES
+    frameworks:
+      - AVFoundation
+      - AppKit
+      - ApplicationServices
+      - Carbon
+      - CoreAudio
+      - AudioToolbox
+      - ServiceManagement
+      - Speech
+      - UserNotifications
+      - sdk: libsqlite3.tbd
+
+targets:
+  VelikiyMoguchiy:
+    templates:
+      - MacApp
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+    dependencies:
+      - package: AppleSpeechBridge
+        product: AppleSpeechBridge
+    preBuildScripts:
+      - name: Build Rust Library
+        script: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+          command -v cmake >/dev/null || { echo "error: cmake is required to build Rust dependency audiopus_sys. Install it with: brew install cmake" >&2; exit 1; }
+          cd "${SRCROOT}/.."
+          RUST_TARGET="aarch64-apple-darwin"
+          cargo build --manifest-path velikiy-moguchiy-core/Cargo.toml --release --target "$RUST_TARGET" --no-default-features --features "apple-speech"
+          mkdir -p "${SRCROOT}/../target/release"
+          ln -sf "${SRCROOT}/../target/${RUST_TARGET}/release/libvelikiy_moguchiy_core.a" "${SRCROOT}/../target/release/libvelikiy_moguchiy_core.a"
+        basedOnDependencyAnalysis: false
+
+  VelikiyMoguchiyLogicTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: VelikiyMoguchiy/AppDelegate/SPAppDelegateLogicTests.m
+      - path: VelikiyMoguchiy/AppDelegate/SPOutputModes.m
+      - path: VelikiyMoguchiy/AppDelegate/SPOutputModesTests.m
+      - path: VelikiyMoguchiy/Hotkey/SPHotkeyMonitor.m
+      - path: VelikiyMoguchiy/History/SPHistoryManager.m
+      - path: VelikiyMoguchiy/History/SPHistoryManagerTests.m
+      - path: VelikiyMoguchiy/History/SPRetranscriber.m
+      - path: VelikiyMoguchiy/History/SPRetranscriberTests.m
+      - path: VelikiyMoguchiy/History/SPDictationsCSV.m
+      - path: VelikiyMoguchiy/History/SPDictationsCSVTests.m
+      - path: VelikiyMoguchiy/Paste/SPTextEditPolicy.m
+      - path: VelikiyMoguchiy/Settings/SPQwenModelChoice.m
+      - path: VelikiyMoguchiy/Settings/SPQwenModelChoiceTests.m
+      - path: VelikiyMoguchiy/Paste/SPTextEditPolicyTests.m
+      - path: VelikiyMoguchiy/LipData/SPLipDataPolicy.m
+      - path: VelikiyMoguchiy/LipData/SPLipDataPolicyTests.m
+      - path: VelikiyMoguchiy/LipData/SPLipsPolicy.m
+      - path: VelikiyMoguchiy/LipData/SPLipsPolicyTests.m
+      - path: VelikiyMoguchiy/LipTraining/SPLipTrainingPolicy.m
+      - path: VelikiyMoguchiy/LipTraining/SPLipTrainingPolicyTests.m
+      - path: VelikiyMoguchiy/Clipboard/SPClipboardManager.m
+      - path: VelikiyMoguchiy/Clipboard/SPClipboardRestorePolicy.m
+      - path: VelikiyMoguchiy/Clipboard/SPClipboardRestorePolicyTests.m
+      - path: VelikiyMoguchiy/Clipboard/SPClipboardManagerTests.m
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: "$(MAC_APP_BUNDLE_IDENTIFIER).logic-tests"
+        CLANG_ENABLE_OBJC_ARC: YES
+    frameworks:
+      - XCTest
+      - Foundation
+      - AVFoundation
+      - sdk: libsqlite3.tbd

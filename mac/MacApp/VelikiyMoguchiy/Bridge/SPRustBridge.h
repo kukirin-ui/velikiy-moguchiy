@@ -1,0 +1,139 @@
+#import <Foundation/Foundation.h>
+
+typedef NS_ENUM(NSInteger, SPSessionModeObjC) {
+    SPSessionModeHold = 0,
+    SPSessionModeToggle = 1,
+};
+
+/// How the core wants the final text delivered (see on_text_delivery in velikiy-moguchiy-core).
+typedef NS_ENUM(NSInteger, SPTextDelivery) {
+    /// Paste the full text as usual.
+    SPTextDeliveryPasteAll = 0,
+    /// The text is already typed into the field; paste nothing.
+    SPTextDeliveryAlreadyTyped = 1,
+    /// A prefix is already in the field; paste only the remainder.
+    SPTextDeliveryPasteRemainder = 2,
+    /// A draft in the field cannot be fixed safely; put the text on the
+    /// clipboard and paste nothing.
+    SPTextDeliveryClipboardOnly = 3,
+};
+
+/// Set on the delivery kind (kinds 0 and 2) when the dictation ended with the
+/// spoken command "отправь": press Return after pasting, like paste.auto_return.
+static const NSInteger SPTextDeliverySendFlag = 0x80;
+
+/// Delegate protocol for Rust core callbacks
+@protocol SPRustBridgeDelegate <NSObject>
+- (void)rustBridgeDidBecomeReady;
+- (void)rustBridgeDidReceiveFinalText:(NSString *)text;
+- (void)rustBridgeDidEncounterError:(NSString *)message;
+- (void)rustBridgeDidReceiveWarning:(NSString *)message;
+- (void)rustBridgeDidChangeState:(NSString *)state;
+- (void)rustBridgeDidReceiveInterimText:(NSString *)text;
+- (void)rustBridgeDidReceiveAsrFinalText:(NSString *)text;
+- (void)rustBridgeDidReceiveRewriteText:(NSString *)text;
+/// How the final text reaches the user, delivered just before
+/// rustBridgeDidReceiveFinalText:. `kind` is an SPTextDelivery value.
+- (void)rustBridgeDidReceiveTextDeliveryKind:(NSInteger)kind remainder:(NSString *)remainder;
+/// Delivered just before rustBridgeDidReceiveFinalText: with metadata about
+/// the session result (raw ASR text, provider name, whether LLM correction
+/// was actually applied). Used for history recording.
+- (void)rustBridgeDidReceiveSessionMetaWithAsrText:(NSString *)asrText
+                                          provider:(NSString *)provider
+                                        llmApplied:(BOOL)llmApplied;
+@end
+
+@interface SPRustBridge : NSObject
+
+/// Monotonic token identifying the current session.
+/// Use this to guard delayed blocks against stale execution.
+@property (nonatomic, readonly) uint64_t currentSessionToken;
+
+/// Whether the current session types its text into the focused field itself
+/// (live insert or streaming insertion). Decided once when the session begins.
+@property (nonatomic, readonly) BOOL currentSessionTypesText;
+
+/// Bundle id of the app that was frontmost when the current session began.
+@property (nonatomic, readonly, copy) NSString *currentSessionBundleId;
+
+- (instancetype)initWithDelegate:(id<SPRustBridgeDelegate>)delegate;
+
+/// Initialize the Rust core library.
+- (void)initializeCore;
+
+/// Shut down the Rust core library.
+- (void)destroyCore;
+
+/// Begin a new voice input session. Returns YES on success.
+- (BOOL)beginSessionWithMode:(SPSessionModeObjC)mode;
+
+/// Push an audio frame to the Rust core.
+- (void)pushAudioFrame:(const void *)buffer length:(uint32_t)length timestamp:(uint64_t)timestamp;
+
+/// End the current session.
+- (void)endSession;
+
+/// Cancel the current session (no text output).
+- (void)cancelSession;
+
+/// Drop callbacks of the current session that are already queued or still to
+/// come (final text, state changes), so a cancelled session can never deliver.
+- (void)discardSessionCallbacks;
+
+/// Request that the current session skip LLM correction and use raw ASR text.
+- (BOOL)acceptAsrResult;
+
+/// Reload configuration.
+- (void)reloadConfig;
+
+// ─── Model Management ──────────────────────────────────────────────
+
+/// Return supported local provider names (e.g. @[@"mlx", @"sherpa-onnx"]).
+- (NSArray<NSString *> *)supportedLocalProviders;
+
+/// Return supported LLM provider names (e.g. OpenAI, Anthropic, APFEL, MLX).
+- (NSArray<NSString *> *)supportedLlmProviders;
+
+/// Fetch remote model IDs using a complete LLM profile so the core can apply
+/// the correct OpenAI or Anthropic authentication headers.
+/// Returns dictionary: { success: BOOL, models: NSArray<NSString *>, message: NSString }
+- (NSDictionary *)llmRemoteModelsForProfile:(NSDictionary *)profile;
+
+/// Scan all models and return array of dictionaries.
+/// Each dict: path, provider, description, repo, total_size, status (0/1/2)
+- (NSArray<NSDictionary *> *)scanModels;
+
+typedef NS_ENUM(NSInteger, SPModelVerifyMode) {
+    SPModelVerifyNormal = 0,      // cached sha256, compute on miss
+    SPModelVerifyCacheOnly = 1,   // cache hit only, no compute
+    SPModelVerifyForce = 2,       // ignore cache, always compute
+};
+
+/// Model status with configurable verification: 0=not installed, 1=incomplete, 2=installed
+- (NSInteger)modelStatus:(NSString *)modelPath mode:(SPModelVerifyMode)mode;
+
+/// Download a model asynchronously.
+- (void)downloadModel:(NSString *)modelPath
+             progress:(void (^)(NSUInteger fileIndex, NSUInteger fileCount,
+                                uint64_t downloaded, uint64_t total,
+                                NSString *filename))progressBlock
+           completion:(void (^)(BOOL success, NSString *message))completionBlock;
+
+/// Cancel an active download.
+- (void)cancelDownload:(NSString *)modelPath;
+
+// ─── Rewrite / Prompt Templates ───────────────────────────────────
+
+/// Get prompt templates as array of dicts mirroring PromptTemplate in Rust config.
+- (NSArray<NSDictionary *> *)promptTemplates;
+
+/// Save prompt templates from array of dicts. Returns YES on success.
+- (BOOL)setPromptTemplates:(NSArray<NSDictionary *> *)templates;
+
+/// Rewrite ASR text using template at given index. Returns YES on success.
+- (BOOL)rewriteWithTemplateIndex:(NSInteger)index asrText:(NSString *)text;
+
+/// Remove downloaded model files (keeps manifest). Returns files removed.
+- (NSInteger)removeModelFiles:(NSString *)modelPath;
+
+@end

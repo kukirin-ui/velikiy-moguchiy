@@ -1,0 +1,3 @@
+/* Home screen and app switcher in Russian. Other languages use CFBundleDisplayName
+   from Info.plist ("Moguchiy"). The keyboards keep their full names. */
+"CFBundleDisplayName" = "Могучий";

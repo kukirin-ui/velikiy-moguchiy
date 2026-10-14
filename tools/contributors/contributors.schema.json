@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Velikiy Moguchiy contributors",
+  "description": "Source of the contributors table in README.md (between <!-- contributors:start --> and <!-- contributors:end -->). Edit this file, not the table.",
+  "type": "object",
+  "required": ["contributors"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "contributors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["github", "data_hours", "training_steps", "accepted_updates"],
+        "additionalProperties": false,
+        "properties": {
+          "github": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$",
+            "description": "GitHub login"
+          },
+          "name": { "type": "string", "maxLength": 80, "description": "Display name (optional; the login is shown otherwise)" },
+          "data_hours": { "type": "number", "minimum": 0, "description": "Hours of lip-reading data contributed with consent" },
+          "training_steps": { "type": "integer", "minimum": 0, "description": "Training steps run on the contributor's hardware" },
+          "accepted_updates": { "type": "integer", "minimum": 0, "description": "Weight updates accepted into the shared adapter" }
+        }
+      }
+    }
+  }
+}

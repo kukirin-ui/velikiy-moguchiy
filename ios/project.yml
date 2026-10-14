@@ -1,0 +1,350 @@
+name: VelikiyMoguchiy
+
+options:
+  bundleIdPrefix: com.example.velikiy-moguchiy
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+packages:
+  KeyboardKit:
+    # The last MIT release; 10.0 and later are closed source.
+    url: https://github.com/KeyboardKit/KeyboardKit
+    exactVersion: 9.9.1
+
+settings:
+  base:
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    SUPPORTS_MACCATALYST: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  VelikiyMoguchiy:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Shared
+      - path: LiveActivity
+      - path: App/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: Resources/Assets.xcassets
+        buildPhase: resources
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(VELIKIY_MOGUCHIY_APP_BUNDLE_IDENTIFIER)"
+        PRODUCT_NAME: VelikiyMoguchiy
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/VelikiyMoguchiy.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE"
+        # Personal sideloaded builds keep the private cold-start handoff (the
+        # keyboard opens the app by URL). Not suitable for the App Store.
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE"
+    dependencies:
+      - target: VelikiyMoguchiyKeyboardRU
+        embed: true
+      - target: VelikiyMoguchiyKeyboardEN
+        embed: true
+      # Live Activity of the armed microphone. Optional at run time: the app
+      # works without it (see README on the signing risk of a 4th bundle id).
+      - target: VelikiyMoguchiyWidgets
+        embed: true
+
+  VelikiyMoguchiyKK:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Shared
+      - path: LiveActivity
+      - path: App/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: Resources/Assets.xcassets
+        buildPhase: resources
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(VELIKIY_MOGUCHIY_APP_BUNDLE_IDENTIFIER)"
+        PRODUCT_NAME: VelikiyMoguchiy
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/VelikiyMoguchiy.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE"
+        # Personal sideloaded builds keep the private cold-start handoff (the
+        # keyboard opens the app by URL). Not suitable for the App Store.
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE"
+    dependencies:
+      - target: VelikiyMoguchiyKeyboardRU
+        embed: true
+      - target: VelikiyMoguchiyKeyboardEN
+        embed: true
+      - target: VelikiyMoguchiyKKKeyboardRU
+        embed: true
+      - target: VelikiyMoguchiyKKKeyboardEN
+        embed: true
+
+  VelikiyMoguchiyWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+        excludes:
+          - "Info.plist"
+      - path: LiveActivity
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(VELIKIY_MOGUCHIY_WIDGET_BUNDLE_IDENTIFIER)"
+        PRODUCT_NAME: VelikiyMoguchiyWidgets
+        INFOPLIST_FILE: Widgets/Info.plist
+        SKIP_INSTALL: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+
+  VelikiyMoguchiyKeyboardRU:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: KeyboardExtension
+        excludes:
+          - "Plists/**"
+          - "**/*.entitlements"
+          - "KeyboardKitVariant/**"
+      - path: Shared
+      - path: KeyboardExtension/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(VELIKIY_MOGUCHIY_KEYBOARD_RU_BUNDLE_IDENTIFIER)"
+        PRODUCT_NAME: VelikiyMoguchiyKeyboardRU
+        INFOPLIST_FILE: KeyboardExtension/Plists/Info-RU.plist
+        CODE_SIGN_ENTITLEMENTS: KeyboardExtension/Keyboard.entitlements
+        SKIP_INSTALL: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE"
+        # Personal sideloaded builds keep the private cold-start handoff (the
+        # keyboard opens the app by URL). Not suitable for the App Store.
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE"
+
+  VelikiyMoguchiyKKKeyboardRU:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: KeyboardExtension
+        excludes:
+          - "Plists/**"
+          - "**/*.entitlements"
+          - "KeyboardKitPort/KeyboardSurfaceView.swift"
+      - path: Shared
+      - path: KeyboardExtension/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - package: KeyboardKit
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(VELIKIY_MOGUCHIY_KEYBOARD_KK_RU_BUNDLE_IDENTIFIER)"
+        PRODUCT_NAME: VelikiyMoguchiyKKKeyboardRU
+        INFOPLIST_FILE: KeyboardExtension/Plists/Info-KK-RU.plist
+        CODE_SIGN_ENTITLEMENTS: KeyboardExtension/Keyboard.entitlements
+        SKIP_INSTALL: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE VELIKIY_MOGUCHIY_KK"
+        # Personal sideloaded builds keep the private cold-start handoff (the
+        # keyboard opens the app by URL). Not suitable for the App Store.
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE VELIKIY_MOGUCHIY_KK"
+
+  VelikiyMoguchiyKeyboardEN:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: KeyboardExtension
+        excludes:
+          - "Plists/**"
+          - "**/*.entitlements"
+          - "KeyboardKitVariant/**"
+      - path: Shared
+      - path: KeyboardExtension/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(VELIKIY_MOGUCHIY_KEYBOARD_EN_BUNDLE_IDENTIFIER)"
+        PRODUCT_NAME: VelikiyMoguchiyKeyboardEN
+        INFOPLIST_FILE: KeyboardExtension/Plists/Info-EN.plist
+        CODE_SIGN_ENTITLEMENTS: KeyboardExtension/Keyboard.entitlements
+        SKIP_INSTALL: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE"
+        # Personal sideloaded builds keep the private cold-start handoff (the
+        # keyboard opens the app by URL). Not suitable for the App Store.
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE"
+
+  VelikiyMoguchiyKKKeyboardEN:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: KeyboardExtension
+        excludes:
+          - "Plists/**"
+          - "**/*.entitlements"
+          - "KeyboardKitPort/KeyboardSurfaceView.swift"
+      - path: Shared
+      - path: KeyboardExtension/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - package: KeyboardKit
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Release: Config/Release.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(VELIKIY_MOGUCHIY_KEYBOARD_KK_EN_BUNDLE_IDENTIFIER)"
+        PRODUCT_NAME: VelikiyMoguchiyKKKeyboardEN
+        INFOPLIST_FILE: KeyboardExtension/Plists/Info-KK-EN.plist
+        CODE_SIGN_ENTITLEMENTS: KeyboardExtension/Keyboard.entitlements
+        SKIP_INSTALL: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE VELIKIY_MOGUCHIY_KK"
+        # Personal sideloaded builds keep the private cold-start handoff (the
+        # keyboard opens the app by URL). Not suitable for the App Store.
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE VELIKIY_MOGUCHIY_KK"
+
+  VelikiyMoguchiyTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.velikiy-moguchiy.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE"
+        # Personal sideloaded builds keep the private cold-start handoff (the
+        # keyboard opens the app by URL). Not suitable for the App Store.
+        Release:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) VELIKIY_MOGUCHIY_PERSONAL_DEVICE"
+    dependencies:
+      - target: VelikiyMoguchiy
+
+  # Screenshots of Apple's keyboard and ours over the tryout field, for the
+  # parity gate (Scripts/parity/parity.sh). Not part of the unit tests.
+  KeyboardParityHost:
+    type: application
+    platform: iOS
+    sources:
+      - path: KeyboardParityHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.velikiy-moguchiy.parity-host
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        CODE_SIGNING_ALLOWED: NO
+
+  KeyboardParityUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: KeyboardParityUITests
+    dependencies:
+      - target: KeyboardParityHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.velikiy-moguchiy.parity-uitests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+        TEST_TARGET_NAME: KeyboardParityHost
+
+  VelikiyMoguchiyKeyboardPortTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: KeyboardPortTests
+      - path: KeyboardExtension/KeyboardKitPort
+      - path: Shared/Keyboard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.velikiy-moguchiy.keyboardporttests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+
+schemes:
+  VelikiyMoguchiy:
+    build:
+      targets:
+        VelikiyMoguchiy: all
+        VelikiyMoguchiyKeyboardRU: all
+        VelikiyMoguchiyKeyboardEN: all
+        VelikiyMoguchiyWidgets: all
+        VelikiyMoguchiyTests: [test]
+        VelikiyMoguchiyKeyboardPortTests: [test]
+    test:
+      gatherCoverageData: true
+      targets:
+        - VelikiyMoguchiyTests
+        - VelikiyMoguchiyKeyboardPortTests
+  # Великий & Могучий RU/EN next to the Великий & Могучий KK keyboards (KeyboardKit 9.9.1), to
+  # compare typing on a phone.
+  VelikiyMoguchiyKK:
+    build:
+      targets:
+        VelikiyMoguchiyKK: all
+  KeyboardParity:
+    build:
+      targets:
+        VelikiyMoguchiy: all
+        KeyboardParityHost: all
+        KeyboardParityUITests: [test]
+    test:
+      targets:
+        - KeyboardParityUITests

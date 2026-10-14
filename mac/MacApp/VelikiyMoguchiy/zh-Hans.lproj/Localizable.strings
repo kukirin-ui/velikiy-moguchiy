@@ -1,0 +1,89 @@
+/* Velikiy Moguchiy — 简体中文本地化 */
+
+/* ─── 状态栏 ─── */
+"statusBar.status.ready" = "就绪 — v%@ (%@)";
+"statusBar.status.listening" = "正在录音...";
+"statusBar.status.connecting" = "正在连接...";
+"statusBar.status.recognizing" = "正在识别...";
+"statusBar.status.thinking" = "正在校正...";
+"statusBar.status.pasting" = "正在粘贴...";
+"statusBar.status.error" = "出错";
+"statusBar.status.working" = "处理中...";
+
+"statusBar.shortcut.format" = "快捷键：%@";
+
+"statusBar.section.statistics" = "使用统计";
+"statusBar.stats.total" = "  累计：%@";
+"statusBar.stats.totalNone" = "  累计：暂无数据";
+"statusBar.stats.chars" = "%ld 字符";
+"statusBar.stats.words" = "%ld 词";
+"statusBar.stats.time" = "  时间：%ld 分 %ld 秒 | %ld 次";
+"statusBar.stats.timeNone" = "  时间：--";
+"statusBar.stats.speedChars" = "  速度：%.0f 字符/分钟";
+"statusBar.stats.speedWords" = "  速度：%.0f 词/分钟";
+"statusBar.stats.speedNone" = "  速度：--";
+
+"statusBar.section.permissions" = "权限";
+"statusBar.permission.checking" = "检查中...";
+"statusBar.permission.granted" = "已授权";
+"statusBar.permission.notGranted" = "未授权 ▸";
+"statusBar.permission.microphone" = "  麦克风：%@";
+"statusBar.permission.accessibility" = "  辅助功能：%@";
+"statusBar.permission.inputMonitoring" = "  输入监控：%@";
+"statusBar.permission.notifications" = "  通知：%@";
+"statusBar.permission.speechRecognition" = "  语音识别：%@";
+
+"statusBar.menu.startVoiceInput" = "开始语音输入";
+"statusBar.menu.stopVoiceInput" = "停止语音输入";
+
+"statusBar.menu.microphone" = "麦克风";
+"statusBar.menu.systemDefault" = "系统默认";
+"statusBar.menu.unavailable" = "%@（不可用）";
+
+"statusBar.menu.recentDictations" = "最近的听写…";
+"statusBar.menu.setupWizard" = "设置向导...";
+"statusBar.menu.openConfig" = "打开配置文件夹...";
+"statusBar.menu.checkUpdates" = "检查更新...";
+"statusBar.menu.launchAtLogin" = "开机启动";
+"statusBar.menu.quit" = "退出 Velikiy Moguchiy";
+
+
+/* ─── 通知 ─── */
+"notification.error.title" = "Velikiy Moguchiy 出错";
+"notification.warning.title" = "Velikiy Moguchiy 警告";
+
+/* ─── 权限弹窗 ─── */
+"permission.microphone.title" = "需要麦克风权限";
+"permission.microphone.message" = "Velikiy Moguchiy 需要麦克风权限来采集语音进行语音输入。\n\n请前往 系统设置 → 隐私与安全性 → 麦克风 中授权。";
+"permission.accessibility.title" = "需要辅助功能权限";
+"permission.accessibility.message" = "Velikiy Moguchiy 需要辅助功能权限来将校正后的文字粘贴到当前应用。\n\n未授权时，文字会复制到剪贴板但无法自动粘贴。\n\n请前往 系统设置 → 隐私与安全性 → 辅助功能 中授权。";
+"permission.inputMonitoring.title" = "需要输入监控权限";
+"permission.inputMonitoring.message" = "Velikiy Moguchiy 需要输入监控权限来全局检测触发快捷键。\n\n未授权时，按下快捷键无法触发录音。\n\n请前往 系统设置 → 隐私与安全性 → 输入监控 中授权。";
+"permission.speechRecognition.title" = "需要语音识别权限";
+"permission.speechRecognition.message" = "Velikiy Moguchiy 需要语音识别权限来使用设备端语音识别（Apple Speech）。\n\n请在弹窗中授权，或前往 系统设置 → 隐私与安全性 → 语音识别 中开启。";
+"permission.button.openSettings" = "打开设置";
+"permission.button.dismiss" = "关闭";
+"permission.button.dontRemind" = "不再提醒";
+
+/* ─── 语言设置 ─── */
+"settings.language.title" = "界面语言";
+"settings.language.followSystem" = "跟随系统";
+"settings.language.restartRequired" = "部分界面元素需要重启 Velikiy Moguchiy 才能完全应用语言更改。";
+"settings.language.restartTitle" = "语言已更改";
+"settings.language.restartMessage" = "界面语言已更改。部分元素可能需要重启 Velikiy Moguchiy 才能更新。";
+"settings.language.restartButton" = "好";
+
+/* ─── 编辑菜单 ─── */
+"menu.edit" = "编辑";
+"menu.edit.undo" = "撤销";
+"menu.edit.redo" = "重做";
+"menu.edit.cut" = "剪切";
+"menu.edit.copy" = "拷贝";
+"menu.edit.paste" = "粘贴";
+"menu.edit.selectAll" = "全选";
+
+"error.asr.timeout" = "语音识别连接超时";
+"error.asr.service" = "语音识别服务出错";
+"error.asr.auth" = "语音识别认证失败";
+"error.audio" = "麦克风无法使用";
+"error.asr.unknown" = "语音识别出错";

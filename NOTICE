@@ -1,0 +1,32 @@
+Velikiy Moguchiy («Великий & Могучий») — "the great and mighty" Russian voice typing
+Copyright (c) 2026 zigansh1n (founder and author) and the Velikiy Moguchiy contributors
+
+The macOS app (mac/) is a fork of koe by Vincent Yang
+(https://github.com/missuo/koe), MIT License, Copyright (c) 2026 Vincent Yang.
+koe's license notice is kept in mac/LICENSE.
+
+The iOS keyboard (ios/) is based on GeminiKeyboardSample by LyalinDotCom
+(https://github.com/LyalinDotCom/GeminiKeyboardSample), Apache License 2.0
+(ios/LICENSE). Modified; the changes are listed in
+ios/THIRD_PARTY.md.
+
+The keyboard layout and interaction code under
+ios/KeyboardExtension/KeyboardKitPort and ios/Shared/Keyboard
+adapts KeyboardKit 9.9.1, MIT License, Copyright (c) 2016-2025 Daniel Saidi
+(ios/THIRD_PARTY_NOTICES.md).
+
+Also included, each under its own license file:
+- mac/vendor/lipflow: Lipflow, MIT License, Copyright (c) 2026 Amy Zhou
+  (with parts of ESPnet under the Apache License 2.0, see its NOTICE);
+- mac/vendor/mic-warm: macos-mic-keepwarm, MIT License,
+  Copyright (c) 2025-2026 Drew Burchfield;
+- clipboard backup code ported from giga-pisar, MIT License,
+  Copyright (c) 2026 moznoazachem (mac/THIRD_PARTY.md).
+
+Artwork: public-domain paintings by V. Vasnetsov, N. Roerich, A. Ryabushkin
+and I. Bilibin (sources in THIRD_PARTY.md); fonts Oglavie, Monomakh and
+Vertograd (fonts-cu, Aleksandr Andreev and Nikita Simmons) and Old Standard
+TT, SIL Open Font License 1.1.
+
+The full list of third-party components, models, datasets and services, with
+their licenses and open questions, is in THIRD_PARTY.md.

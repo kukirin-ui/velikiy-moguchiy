@@ -1,0 +1,1437 @@
+{
+ "summary": {
+  "n": 64,
+  "thresholds": {
+   "seg_conf_min": 3.0,
+   "off_center": -1,
+   "off_tol": 3
+  },
+  "own_conf_median": 4.85,
+  "null_conf_median": 1.33,
+  "own_offset_median": -2.0,
+  "pass_own": 0.875,
+  "pass_null": 0.0,
+  "by_corpus": {
+   "golos": {
+    "n": 32,
+    "own_conf_median": 4.13,
+    "pass_own": 0.812
+   },
+   "ruls": {
+    "n": 32,
+    "own_conf_median": 5.47,
+    "pass_own": 0.938
+   }
+  }
+ },
+ "rows": [
+  {
+   "clip": "synth_golos_078a4b73c210",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000434",
+   "sec": 2.08,
+   "own": {
+    "offset": 0,
+    "conf": 1.6285200119018555,
+    "minval": 10.245733261108398,
+    "medval": 11.874253273010254,
+    "n": 46
+   },
+   "null": {
+    "offset": 9,
+    "conf": 2.0097227096557617,
+    "minval": 12.298760414123535,
+    "medval": 14.308483123779297,
+    "n": 47
+   },
+   "pass_own": false,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_08852f3d7073",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000344",
+   "sec": 3.76,
+   "own": {
+    "offset": -2,
+    "conf": 7.447660446166992,
+    "minval": 6.534299850463867,
+    "medval": 13.98196029663086,
+    "n": 88
+   },
+   "null": {
+    "offset": -7,
+    "conf": 2.2693443298339844,
+    "minval": 12.399909019470215,
+    "medval": 14.6692533493042,
+    "n": 73
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_158269cf3641",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000214",
+   "sec": 2.1,
+   "own": {
+    "offset": -2,
+    "conf": 3.6852779388427734,
+    "minval": 8.082892417907715,
+    "medval": 11.768170356750488,
+    "n": 47
+   },
+   "null": {
+    "offset": -9,
+    "conf": 2.124055862426758,
+    "minval": 12.287436485290527,
+    "medval": 14.411492347717285,
+    "n": 47
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_174de3bd1233",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000162",
+   "sec": 3.8,
+   "own": {
+    "offset": -2,
+    "conf": 4.2509589195251465,
+    "minval": 6.943765163421631,
+    "medval": 11.194724082946777,
+    "n": 89
+   },
+   "null": {
+    "offset": -3,
+    "conf": 0.9589900970458984,
+    "minval": 15.16191291809082,
+    "medval": 16.12090301513672,
+    "n": 90
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_196dd81918d0",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000162",
+   "sec": 4.68,
+   "own": {
+    "offset": -2,
+    "conf": 4.215177536010742,
+    "minval": 8.494584083557129,
+    "medval": 12.709761619567871,
+    "n": 111
+   },
+   "null": {
+    "offset": -14,
+    "conf": 1.9206552505493164,
+    "minval": 13.540794372558594,
+    "medval": 15.46144962310791,
+    "n": 112
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_38222c8d7c2b",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000441",
+   "sec": 3.66,
+   "own": {
+    "offset": -3,
+    "conf": 3.4777512550354004,
+    "minval": 5.472073078155518,
+    "medval": 8.949824333190918,
+    "n": 86
+   },
+   "null": {
+    "offset": -12,
+    "conf": 1.3173847198486328,
+    "minval": 13.17639446258545,
+    "medval": 14.493779182434082,
+    "n": 79
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_384f6e63d51a",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000378",
+   "sec": 3.483,
+   "own": {
+    "offset": -2,
+    "conf": 5.880228042602539,
+    "minval": 7.756305694580078,
+    "medval": 13.636533737182617,
+    "n": 81
+   },
+   "null": {
+    "offset": -12,
+    "conf": 0.7571077346801758,
+    "minval": 14.05138874053955,
+    "medval": 14.808496475219727,
+    "n": 80
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_3a349783ccf9",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000464",
+   "sec": 4.1,
+   "own": {
+    "offset": -1,
+    "conf": 4.9996442794799805,
+    "minval": 9.530633926391602,
+    "medval": 14.530278205871582,
+    "n": 97
+   },
+   "null": {
+    "offset": -7,
+    "conf": 1.255838394165039,
+    "minval": 13.01677131652832,
+    "medval": 14.27260971069336,
+    "n": 97
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_3f22a787449c",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000564",
+   "sec": 1.232,
+   "own": {
+    "offset": -3,
+    "conf": 3.8011322021484375,
+    "minval": 7.8755340576171875,
+    "medval": 11.676666259765625,
+    "n": 25
+   },
+   "null": {
+    "offset": -14,
+    "conf": 3.520298957824707,
+    "minval": 10.064674377441406,
+    "medval": 13.584973335266113,
+    "n": 25
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_43bfccfb2a9e",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000464",
+   "sec": 3.92,
+   "own": {
+    "offset": -1,
+    "conf": 4.641303062438965,
+    "minval": 8.520148277282715,
+    "medval": 13.16145133972168,
+    "n": 92
+   },
+   "null": {
+    "offset": 15,
+    "conf": 0.9027061462402344,
+    "minval": 14.780908584594727,
+    "medval": 15.683614730834961,
+    "n": 93
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_6ac9a050bccf",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000155",
+   "sec": 3.85,
+   "own": {
+    "offset": -2,
+    "conf": 5.193607330322266,
+    "minval": 8.355659484863281,
+    "medval": 13.549266815185547,
+    "n": 91
+   },
+   "null": {
+    "offset": -8,
+    "conf": 2.2260141372680664,
+    "minval": 12.728856086730957,
+    "medval": 14.954870223999023,
+    "n": 47
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_6febd50d0593",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000279",
+   "sec": 2.76,
+   "own": {
+    "offset": -3,
+    "conf": 4.0333051681518555,
+    "minval": 9.083003997802734,
+    "medval": 13.11630916595459,
+    "n": 63
+   },
+   "null": {
+    "offset": -15,
+    "conf": 1.4631929397583008,
+    "minval": 13.189791679382324,
+    "medval": 14.652984619140625,
+    "n": 64
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_71e5261c7f35",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000421",
+   "sec": 4.342,
+   "own": {
+    "offset": -2,
+    "conf": 2.8112564086914062,
+    "minval": 8.647929191589355,
+    "medval": 11.459185600280762,
+    "n": 103
+   },
+   "null": {
+    "offset": -11,
+    "conf": 0.9354333877563477,
+    "minval": 12.419829368591309,
+    "medval": 13.355262756347656,
+    "n": 103
+   },
+   "pass_own": false,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_721914dcf75a",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000562",
+   "sec": 3.645,
+   "own": {
+    "offset": -2,
+    "conf": 7.111832141876221,
+    "minval": 6.0446906089782715,
+    "medval": 13.156522750854492,
+    "n": 86
+   },
+   "null": {
+    "offset": -10,
+    "conf": 2.001924514770508,
+    "minval": 12.547607421875,
+    "medval": 14.549531936645508,
+    "n": 86
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_7450a3f30f48",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000023",
+   "sec": 4.319,
+   "own": {
+    "offset": -2,
+    "conf": 4.9478864669799805,
+    "minval": 8.450827598571777,
+    "medval": 13.398714065551758,
+    "n": 102
+   },
+   "null": {
+    "offset": -11,
+    "conf": 2.2735328674316406,
+    "minval": 12.669404029846191,
+    "medval": 14.942936897277832,
+    "n": 102
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_7541e74db70b",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000275",
+   "sec": 3.784,
+   "own": {
+    "offset": -2,
+    "conf": 3.122314453125,
+    "minval": 9.143636703491211,
+    "medval": 12.265951156616211,
+    "n": 89
+   },
+   "null": {
+    "offset": -2,
+    "conf": 1.1641578674316406,
+    "minval": 13.571407318115234,
+    "medval": 14.735565185546875,
+    "n": 89
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_783ec5d5dac9",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000492",
+   "sec": 1.61,
+   "own": {
+    "offset": -2,
+    "conf": 5.627476692199707,
+    "minval": 8.189435958862305,
+    "medval": 13.816912651062012,
+    "n": 35
+   },
+   "null": {
+    "offset": 9,
+    "conf": 1.3992509841918945,
+    "minval": 11.165468215942383,
+    "medval": 12.564719200134277,
+    "n": 35
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_78e0902d11a3",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000434",
+   "sec": 2.88,
+   "own": {
+    "offset": -1,
+    "conf": 6.3829498291015625,
+    "minval": 6.553199768066406,
+    "medval": 12.936149597167969,
+    "n": 66
+   },
+   "null": {
+    "offset": -2,
+    "conf": 1.7550201416015625,
+    "minval": 12.099358558654785,
+    "medval": 13.854378700256348,
+    "n": 58
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_79799cfae224",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000641",
+   "sec": 4.44,
+   "own": {
+    "offset": -3,
+    "conf": 3.5698118209838867,
+    "minval": 7.146354675292969,
+    "medval": 10.716166496276855,
+    "n": 105
+   },
+   "null": {
+    "offset": -15,
+    "conf": 0.7803325653076172,
+    "minval": 14.800638198852539,
+    "medval": 15.580970764160156,
+    "n": 106
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_89a74fbdd2d8",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000039",
+   "sec": 4.12,
+   "own": {
+    "offset": -3,
+    "conf": 4.790252685546875,
+    "minval": 9.341614723205566,
+    "medval": 14.131867408752441,
+    "n": 97
+   },
+   "null": {
+    "offset": -15,
+    "conf": 1.706930160522461,
+    "minval": 13.242980003356934,
+    "medval": 14.949910163879395,
+    "n": 98
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_8fdd276318db",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000136",
+   "sec": 3.6,
+   "own": {
+    "offset": -2,
+    "conf": 4.048292636871338,
+    "minval": 7.124826908111572,
+    "medval": 11.17311954498291,
+    "n": 84
+   },
+   "null": {
+    "offset": -7,
+    "conf": 0.8876733779907227,
+    "minval": 14.002872467041016,
+    "medval": 14.890545845031738,
+    "n": 85
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_9b9832f9995e",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000405",
+   "sec": 5.14,
+   "own": {
+    "offset": -3,
+    "conf": 3.504977226257324,
+    "minval": 8.871781349182129,
+    "medval": 12.376758575439453,
+    "n": 123
+   },
+   "null": {
+    "offset": -14,
+    "conf": 1.1305561065673828,
+    "minval": 14.41662883758545,
+    "medval": 15.547184944152832,
+    "n": 123
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_a24ed80c939e",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000627",
+   "sec": 4.84,
+   "own": {
+    "offset": -3,
+    "conf": 3.199547290802002,
+    "minval": 5.683421611785889,
+    "medval": 8.88296890258789,
+    "n": 115
+   },
+   "null": {
+    "offset": -15,
+    "conf": 1.3950614929199219,
+    "minval": 14.744333267211914,
+    "medval": 16.139394760131836,
+    "n": 85
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_a996b6041fbe",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000274",
+   "sec": 2.252,
+   "own": {
+    "offset": -2,
+    "conf": 7.461599349975586,
+    "minval": 6.536311149597168,
+    "medval": 13.997910499572754,
+    "n": 51
+   },
+   "null": {
+    "offset": 7,
+    "conf": 2.7364912033081055,
+    "minval": 11.293037414550781,
+    "medval": 14.029528617858887,
+    "n": 51
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_ba3179f2f96d",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000378",
+   "sec": 7.1,
+   "own": {
+    "offset": -2,
+    "conf": 5.453964710235596,
+    "minval": 6.764732837677002,
+    "medval": 12.218697547912598,
+    "n": 172
+   },
+   "null": {
+    "offset": 9,
+    "conf": 1.5854387283325195,
+    "minval": 13.409194946289062,
+    "medval": 14.994633674621582,
+    "n": 97
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_cddedfe4e46b",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000208",
+   "sec": 4.554,
+   "own": {
+    "offset": -3,
+    "conf": 2.290140151977539,
+    "minval": 10.382807731628418,
+    "medval": 12.672947883605957,
+    "n": 108
+   },
+   "null": {
+    "offset": 13,
+    "conf": 1.0030698776245117,
+    "minval": 13.14673137664795,
+    "medval": 14.149801254272461,
+    "n": 82
+   },
+   "pass_own": false,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_d1becec7ab42",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000093",
+   "sec": 3.26,
+   "own": {
+    "offset": -4,
+    "conf": 2.854987144470215,
+    "minval": 10.002652168273926,
+    "medval": 12.85763931274414,
+    "n": 76
+   },
+   "null": {
+    "offset": -1,
+    "conf": 1.7227487564086914,
+    "minval": 11.985217094421387,
+    "medval": 13.707965850830078,
+    "n": 76
+   },
+   "pass_own": false,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_dbcb7a951f83",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000391",
+   "sec": 1.364,
+   "own": {
+    "offset": -11,
+    "conf": 1.5226879119873047,
+    "minval": 9.56003475189209,
+    "medval": 11.082722663879395,
+    "n": 28
+   },
+   "null": {
+    "offset": 13,
+    "conf": 1.2407655715942383,
+    "minval": 10.09282398223877,
+    "medval": 11.333589553833008,
+    "n": 29
+   },
+   "pass_own": false,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_e3363e8d81e1",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000627",
+   "sec": 3.738,
+   "own": {
+    "offset": -2,
+    "conf": 4.050676345825195,
+    "minval": 9.304084777832031,
+    "medval": 13.354761123657227,
+    "n": 88
+   },
+   "null": {
+    "offset": 11,
+    "conf": 0.8219242095947266,
+    "minval": 13.037698745727539,
+    "medval": 13.859622955322266,
+    "n": 88
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_f0df98a9e877",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000550",
+   "sec": 2.74,
+   "own": {
+    "offset": -4,
+    "conf": 4.5014543533325195,
+    "minval": 8.062180519104004,
+    "medval": 12.563634872436523,
+    "n": 63
+   },
+   "null": {
+    "offset": 7,
+    "conf": 1.5443735122680664,
+    "minval": 13.153119087219238,
+    "medval": 14.697492599487305,
+    "n": 63
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_f9ba624a725a",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000441",
+   "sec": 3.68,
+   "own": {
+    "offset": -2,
+    "conf": 2.986581325531006,
+    "minval": 7.0333123207092285,
+    "medval": 10.019893646240234,
+    "n": 86
+   },
+   "null": {
+    "offset": 12,
+    "conf": 0.8163204193115234,
+    "minval": 12.963956832885742,
+    "medval": 13.780277252197266,
+    "n": 87
+   },
+   "pass_own": false,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_golos_fa1e4a883c3a",
+   "corpus": "golos",
+   "face": "SFHQ_pt4_00000385",
+   "sec": 3.088,
+   "own": {
+    "offset": -4,
+    "conf": 4.901339530944824,
+    "minval": 8.690339088439941,
+    "medval": 13.591678619384766,
+    "n": 72
+   },
+   "null": {
+    "offset": -9,
+    "conf": 0.9722185134887695,
+    "minval": 12.543408393859863,
+    "medval": 13.515626907348633,
+    "n": 72
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_0182e4b7c1f4",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000562",
+   "sec": 6.34,
+   "own": {
+    "offset": -2,
+    "conf": 7.154397964477539,
+    "minval": 7.713794708251953,
+    "medval": 14.868192672729492,
+    "n": 153
+   },
+   "null": {
+    "offset": -12,
+    "conf": 1.5323219299316406,
+    "minval": 10.947829246520996,
+    "medval": 12.480151176452637,
+    "n": 46
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_0548b9229f9d",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000245",
+   "sec": 3.14,
+   "own": {
+    "offset": -3,
+    "conf": 4.63289737701416,
+    "minval": 8.82728099822998,
+    "medval": 13.46017837524414,
+    "n": 73
+   },
+   "null": {
+    "offset": 3,
+    "conf": 0.9019184112548828,
+    "minval": 12.720301628112793,
+    "medval": 13.622220039367676,
+    "n": 73
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_1706bd33030f",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000618",
+   "sec": 7.02,
+   "own": {
+    "offset": -2,
+    "conf": 6.726998329162598,
+    "minval": 8.013324737548828,
+    "medval": 14.740323066711426,
+    "n": 170
+   },
+   "null": {
+    "offset": 2,
+    "conf": 1.2096672058105469,
+    "minval": 11.811850547790527,
+    "medval": 13.021517753601074,
+    "n": 47
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_1756be3d94c2",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000562",
+   "sec": 6.29,
+   "own": {
+    "offset": -2,
+    "conf": 6.703624725341797,
+    "minval": 8.104830741882324,
+    "medval": 14.808455467224121,
+    "n": 152
+   },
+   "null": {
+    "offset": 8,
+    "conf": 1.1198806762695312,
+    "minval": 12.695164680480957,
+    "medval": 13.815045356750488,
+    "n": 89
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_1d1e8530bb4e",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000151",
+   "sec": 6.65,
+   "own": {
+    "offset": -2,
+    "conf": 4.497814178466797,
+    "minval": 9.27121639251709,
+    "medval": 13.769030570983887,
+    "n": 161
+   },
+   "null": {
+    "offset": 9,
+    "conf": 0.5711612701416016,
+    "minval": 12.971298217773438,
+    "medval": 13.542459487915039,
+    "n": 111
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_20802306e899",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000603",
+   "sec": 3.38,
+   "own": {
+    "offset": -2,
+    "conf": 6.618441581726074,
+    "minval": 8.271480560302734,
+    "medval": 14.889922142028809,
+    "n": 79
+   },
+   "null": {
+    "offset": 8,
+    "conf": 1.0826482772827148,
+    "minval": 12.805532455444336,
+    "medval": 13.88818073272705,
+    "n": 79
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_2e88eb6627d3",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000567",
+   "sec": 3.42,
+   "own": {
+    "offset": -2,
+    "conf": 5.6028289794921875,
+    "minval": 8.883793830871582,
+    "medval": 14.48662281036377,
+    "n": 80
+   },
+   "null": {
+    "offset": 3,
+    "conf": 1.8015546798706055,
+    "minval": 12.410423278808594,
+    "medval": 14.2119779586792,
+    "n": 80
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_3dd60ec2142e",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000519",
+   "sec": 7.44,
+   "own": {
+    "offset": 1,
+    "conf": 5.338586807250977,
+    "minval": 9.481037139892578,
+    "medval": 14.819623947143555,
+    "n": 180
+   },
+   "null": {
+    "offset": -5,
+    "conf": 1.0337600708007812,
+    "minval": 13.346036911010742,
+    "medval": 14.379796981811523,
+    "n": 97
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_473cda6a3e90",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000230",
+   "sec": 5.26,
+   "own": {
+    "offset": -3,
+    "conf": 6.649921894073486,
+    "minval": 7.353396892547607,
+    "medval": 14.003318786621094,
+    "n": 126
+   },
+   "null": {
+    "offset": 10,
+    "conf": 3.2551984786987305,
+    "minval": 9.356021881103516,
+    "medval": 12.611220359802246,
+    "n": 25
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_4dc718433f62",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000214",
+   "sec": 5.26,
+   "own": {
+    "offset": -2,
+    "conf": 5.796765327453613,
+    "minval": 8.771002769470215,
+    "medval": 14.567768096923828,
+    "n": 126
+   },
+   "null": {
+    "offset": 8,
+    "conf": 1.2524137496948242,
+    "minval": 12.70509147644043,
+    "medval": 13.957505226135254,
+    "n": 92
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_5738fb947f02",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000358",
+   "sec": 2.1,
+   "own": {
+    "offset": -2,
+    "conf": 4.513655662536621,
+    "minval": 8.741726875305176,
+    "medval": 13.255382537841797,
+    "n": 47
+   },
+   "null": {
+    "offset": -7,
+    "conf": 1.6676034927368164,
+    "minval": 12.320706367492676,
+    "medval": 13.988309860229492,
+    "n": 47
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_5b645d5e3ae2",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000384",
+   "sec": 4.83,
+   "own": {
+    "offset": 1,
+    "conf": 2.8425216674804688,
+    "minval": 11.193382263183594,
+    "medval": 14.035903930664062,
+    "n": 115
+   },
+   "null": {
+    "offset": 15,
+    "conf": 1.1707696914672852,
+    "minval": 11.489128112792969,
+    "medval": 12.659897804260254,
+    "n": 63
+   },
+   "pass_own": false,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_747922ea0245",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000541",
+   "sec": 7.42,
+   "own": {
+    "offset": -2,
+    "conf": 4.044486999511719,
+    "minval": 9.957237243652344,
+    "medval": 14.001724243164062,
+    "n": 180
+   },
+   "null": {
+    "offset": 8,
+    "conf": 0.6408910751342773,
+    "minval": 12.409198760986328,
+    "medval": 13.050089836120605,
+    "n": 103
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_7ada1f5ffd0d",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000240",
+   "sec": 4.85,
+   "own": {
+    "offset": -2,
+    "conf": 5.409117698669434,
+    "minval": 9.099202156066895,
+    "medval": 14.508319854736328,
+    "n": 116
+   },
+   "null": {
+    "offset": -13,
+    "conf": 1.779902458190918,
+    "minval": 11.910030364990234,
+    "medval": 13.689932823181152,
+    "n": 86
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_7c2806072c3e",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000019",
+   "sec": 4.9,
+   "own": {
+    "offset": -2,
+    "conf": 4.909639358520508,
+    "minval": 9.032179832458496,
+    "medval": 13.941819190979004,
+    "n": 117
+   },
+   "null": {
+    "offset": 8,
+    "conf": 1.3354072570800781,
+    "minval": 12.05770206451416,
+    "medval": 13.393109321594238,
+    "n": 102
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_7d8bdefbc4f3",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000260",
+   "sec": 6.54,
+   "own": {
+    "offset": -3,
+    "conf": 5.845658302307129,
+    "minval": 8.69137191772461,
+    "medval": 14.537030220031738,
+    "n": 158
+   },
+   "null": {
+    "offset": -3,
+    "conf": 1.1282176971435547,
+    "minval": 12.274961471557617,
+    "medval": 13.403179168701172,
+    "n": 89
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_8379c951d96e",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000434",
+   "sec": 6.4,
+   "own": {
+    "offset": -1,
+    "conf": 4.232132911682129,
+    "minval": 9.118080139160156,
+    "medval": 13.350213050842285,
+    "n": 154
+   },
+   "null": {
+    "offset": -14,
+    "conf": 1.8024883270263672,
+    "minval": 12.586352348327637,
+    "medval": 14.388840675354004,
+    "n": 35
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_885b22e222ec",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000058",
+   "sec": 2.54,
+   "own": {
+    "offset": -3,
+    "conf": 6.136864185333252,
+    "minval": 7.943247318267822,
+    "medval": 14.080111503601074,
+    "n": 58
+   },
+   "null": {
+    "offset": 11,
+    "conf": 1.0699043273925781,
+    "minval": 12.337421417236328,
+    "medval": 13.407325744628906,
+    "n": 58
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_8c2d3c223135",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000464",
+   "sec": 4.7,
+   "own": {
+    "offset": -1,
+    "conf": 5.196734428405762,
+    "minval": 8.948265075683594,
+    "medval": 14.144999504089355,
+    "n": 112
+   },
+   "null": {
+    "offset": 15,
+    "conf": 1.4020843505859375,
+    "minval": 12.351137161254883,
+    "medval": 13.75322151184082,
+    "n": 105
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_961e496050cb",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000577",
+   "sec": 4.37,
+   "own": {
+    "offset": -2,
+    "conf": 5.538995742797852,
+    "minval": 8.134440422058105,
+    "medval": 13.673436164855957,
+    "n": 104
+   },
+   "null": {
+    "offset": 10,
+    "conf": 1.8925352096557617,
+    "minval": 12.058236122131348,
+    "medval": 13.95077133178711,
+    "n": 97
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_a88f82765331",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000567",
+   "sec": 5.46,
+   "own": {
+    "offset": -2,
+    "conf": 6.205649375915527,
+    "minval": 8.106080055236816,
+    "medval": 14.311729431152344,
+    "n": 131
+   },
+   "null": {
+    "offset": -7,
+    "conf": 0.9271783828735352,
+    "minval": 12.594975471496582,
+    "medval": 13.522153854370117,
+    "n": 84
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_ab01d46c6a00",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000090",
+   "sec": 6.94,
+   "own": {
+    "offset": -3,
+    "conf": 5.839853286743164,
+    "minval": 8.874204635620117,
+    "medval": 14.714057922363281,
+    "n": 168
+   },
+   "null": {
+    "offset": 7,
+    "conf": 1.2034168243408203,
+    "minval": 12.854984283447266,
+    "medval": 14.058401107788086,
+    "n": 123
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_b49edffc2e5a",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000492",
+   "sec": 3.61,
+   "own": {
+    "offset": -2,
+    "conf": 5.748021125793457,
+    "minval": 9.438919067382812,
+    "medval": 15.18694019317627,
+    "n": 85
+   },
+   "null": {
+    "offset": 9,
+    "conf": 0.9493656158447266,
+    "minval": 12.752237319946289,
+    "medval": 13.701602935791016,
+    "n": 85
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_b6e594785f13",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000144",
+   "sec": 5.61,
+   "own": {
+    "offset": -3,
+    "conf": 5.559229850769043,
+    "minval": 8.857975959777832,
+    "medval": 14.417205810546875,
+    "n": 135
+   },
+   "null": {
+    "offset": -12,
+    "conf": 4.179749488830566,
+    "minval": 9.324606895446777,
+    "medval": 13.504356384277344,
+    "n": 51
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_cf10797d1970",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000519",
+   "sec": 4.12,
+   "own": {
+    "offset": 1,
+    "conf": 4.910025596618652,
+    "minval": 8.698978424072266,
+    "medval": 13.609004020690918,
+    "n": 97
+   },
+   "null": {
+    "offset": -5,
+    "conf": 0.3725700378417969,
+    "minval": 13.108057022094727,
+    "medval": 13.480627059936523,
+    "n": 98
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_daa70ac7443e",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000090",
+   "sec": 3.51,
+   "own": {
+    "offset": -3,
+    "conf": 4.44316291809082,
+    "minval": 9.329526901245117,
+    "medval": 13.772689819335938,
+    "n": 82
+   },
+   "null": {
+    "offset": -15,
+    "conf": 2.2131214141845703,
+    "minval": 11.717656135559082,
+    "medval": 13.930777549743652,
+    "n": 82
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_dc2fe63db4c8",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000095",
+   "sec": 3.43,
+   "own": {
+    "offset": -3,
+    "conf": 2.971552848815918,
+    "minval": 10.052624702453613,
+    "medval": 13.024177551269531,
+    "n": 80
+   },
+   "null": {
+    "offset": -5,
+    "conf": 1.6306705474853516,
+    "minval": 11.254676818847656,
+    "medval": 12.885347366333008,
+    "n": 76
+   },
+   "pass_own": false,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_dee6973f585d",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000390",
+   "sec": 3.93,
+   "own": {
+    "offset": -3,
+    "conf": 3.8695974349975586,
+    "minval": 9.689286231994629,
+    "medval": 13.558883666992188,
+    "n": 93
+   },
+   "null": {
+    "offset": 15,
+    "conf": 1.790121078491211,
+    "minval": 9.568394660949707,
+    "medval": 11.358515739440918,
+    "n": 28
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_f061b293efb4",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000298",
+   "sec": 4.26,
+   "own": {
+    "offset": -2,
+    "conf": 6.274588584899902,
+    "minval": 8.228830337524414,
+    "medval": 14.503418922424316,
+    "n": 101
+   },
+   "null": {
+    "offset": 15,
+    "conf": 1.8874073028564453,
+    "minval": 12.225971221923828,
+    "medval": 14.113378524780273,
+    "n": 88
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_f68e99dff129",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000471",
+   "sec": 7.99,
+   "own": {
+    "offset": -2,
+    "conf": 6.133901596069336,
+    "minval": 8.724777221679688,
+    "medval": 14.858678817749023,
+    "n": 194
+   },
+   "null": {
+    "offset": -15,
+    "conf": 2.6434593200683594,
+    "minval": 11.578307151794434,
+    "medval": 14.221766471862793,
+    "n": 63
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_f75b17f5956d",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000353",
+   "sec": 6.22,
+   "own": {
+    "offset": -3,
+    "conf": 3.6789770126342773,
+    "minval": 9.713082313537598,
+    "medval": 13.392059326171875,
+    "n": 150
+   },
+   "null": {
+    "offset": -10,
+    "conf": 0.8074159622192383,
+    "minval": 12.82040023803711,
+    "medval": 13.627816200256348,
+    "n": 86
+   },
+   "pass_own": true,
+   "pass_null": false
+  },
+  {
+   "clip": "synth_ruls_fc1e9516b858",
+   "corpus": "ruls",
+   "face": "SFHQ_pt4_00000464",
+   "sec": 3.92,
+   "own": {
+    "offset": -1,
+    "conf": 4.326535224914551,
+    "minval": 9.638790130615234,
+    "medval": 13.965325355529785,
+    "n": 92
+   },
+   "null": {
+    "offset": -15,
+    "conf": 1.0258655548095703,
+    "minval": 12.69346809387207,
+    "medval": 13.71933364868164,
+    "n": 72
+   },
+   "pass_own": true,
+   "pass_null": false
+  }
+ ]
+}

@@ -1,0 +1,73 @@
+name: Release
+
+# A v* tag (for example v0.1.0) builds the Mac app and the unsigned IPA through
+# build-apple.yml and creates a DRAFT GitHub release with both files, their
+# SHA-256 checksums and the Russian release notes from .github/release-notes.md.
+# Nothing is published until the draft is published by hand on the Releases
+# page. Tags are made by the owner; this workflow never creates one.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    uses: ./.github/workflows/build-apple.yml
+    with:
+      mac: true
+      ios: true
+
+  draft:
+    name: Draft release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the builds
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums and release notes
+        run: |
+          set -euo pipefail
+          cd dist
+          test -f VelikiyMoguchiy-macOS-arm64.zip
+          test -f VelikiyMoguchiy-iOS-unsigned.ipa
+          sha256sum VelikiyMoguchiy-macOS-arm64.zip VelikiyMoguchiy-iOS-unsigned.ipa > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          cd ..
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed "s/{{VERSION}}/${VERSION}/g" .github/release-notes.md > "$RUNNER_TEMP/notes.md"
+
+      - name: Create or update the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          FILES=(dist/VelikiyMoguchiy-macOS-arm64.zip dist/VelikiyMoguchiy-iOS-unsigned.ipa dist/SHA256SUMS.txt)
+          TITLE="«Великий & Могучий» ${TAG#v}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # A re-run: refresh the files and notes, keep whatever state the release is in.
+            gh release upload "$TAG" "${FILES[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            PRERELEASE=()
+            case "$TAG" in *-*) PRERELEASE=(--prerelease) ;; esac
+            gh release create "$TAG" "${FILES[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+              "${PRERELEASE[@]}" --title "$TITLE" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
+          echo "Draft ready: https://github.com/${GITHUB_REPOSITORY}/releases (publish it by hand)"

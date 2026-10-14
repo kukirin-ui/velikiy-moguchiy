@@ -1,0 +1,29 @@
+{
+ "properties": {
+  "status": {
+   "const": "ok",
+   "default": "ok",
+   "title": "Status",
+   "type": "string"
+  },
+  "protocol": {
+   "default": 2,
+   "title": "Protocol",
+   "type": "integer"
+  },
+  "latest_version": {
+   "anyOf": [
+    {
+     "type": "integer"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Latest Version"
+  }
+ },
+ "title": "Health",
+ "type": "object"
+}

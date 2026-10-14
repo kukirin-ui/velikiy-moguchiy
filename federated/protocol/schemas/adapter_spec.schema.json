@@ -1,0 +1,77 @@
+{
+ "$defs": {
+  "TensorSpec": {
+   "additionalProperties": false,
+   "properties": {
+    "name": {
+     "title": "Name",
+     "type": "string"
+    },
+    "shape": {
+     "items": {
+      "type": "integer"
+     },
+     "title": "Shape",
+     "type": "array"
+    },
+    "kind": {
+     "default": "other",
+     "enum": [
+      "lora_A",
+      "lora_B",
+      "other"
+     ],
+     "title": "Kind",
+     "type": "string"
+    },
+    "trainable": {
+     "default": true,
+     "title": "Trainable",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "name",
+    "shape"
+   ],
+   "title": "TensorSpec",
+   "type": "object"
+  }
+ },
+ "additionalProperties": false,
+ "properties": {
+  "spec_id": {
+   "title": "Spec Id",
+   "type": "string"
+  },
+  "format": {
+   "default": 1,
+   "title": "Format",
+   "type": "integer"
+  },
+  "rank": {
+   "title": "Rank",
+   "type": "integer"
+  },
+  "alpha": {
+   "title": "Alpha",
+   "type": "number"
+  },
+  "tensors": {
+   "items": {
+    "$ref": "#/$defs/TensorSpec"
+   },
+   "minItems": 1,
+   "title": "Tensors",
+   "type": "array"
+  }
+ },
+ "required": [
+  "spec_id",
+  "rank",
+  "alpha",
+  "tensors"
+ ],
+ "title": "AdapterSpec",
+ "type": "object"
+}

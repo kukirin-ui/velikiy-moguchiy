@@ -1,0 +1,89 @@
+/* Velikiy Moguchiy — English localization */
+
+/* ─── Status Bar ─── */
+"statusBar.status.ready" = "Ready — v%@ (%@)";
+"statusBar.status.listening" = "Listening...";
+"statusBar.status.connecting" = "Connecting...";
+"statusBar.status.recognizing" = "Recognizing...";
+"statusBar.status.thinking" = "Thinking...";
+"statusBar.status.pasting" = "Pasting...";
+"statusBar.status.error" = "Error";
+"statusBar.status.working" = "Working...";
+
+"statusBar.shortcut.format" = "Shortcut: %@";
+
+"statusBar.section.statistics" = "Statistics";
+"statusBar.stats.total" = "  Total: %@";
+"statusBar.stats.totalNone" = "  Total: No data yet";
+"statusBar.stats.chars" = "%ld chars";
+"statusBar.stats.words" = "%ld words";
+"statusBar.stats.time" = "  Time: %ld min %ld sec | %ld sessions";
+"statusBar.stats.timeNone" = "  Time: --";
+"statusBar.stats.speedChars" = "  Speed: %.0f chars/min";
+"statusBar.stats.speedWords" = "  Speed: %.0f words/min";
+"statusBar.stats.speedNone" = "  Speed: --";
+
+"statusBar.section.permissions" = "Permissions";
+"statusBar.permission.checking" = "Checking...";
+"statusBar.permission.granted" = "Granted";
+"statusBar.permission.notGranted" = "Not Granted ▸";
+"statusBar.permission.microphone" = "  Microphone: %@";
+"statusBar.permission.accessibility" = "  Accessibility: %@";
+"statusBar.permission.inputMonitoring" = "  Input Monitoring: %@";
+"statusBar.permission.notifications" = "  Notifications: %@";
+"statusBar.permission.speechRecognition" = "  Speech Recognition: %@";
+
+"statusBar.menu.startVoiceInput" = "Start Voice Input";
+"statusBar.menu.stopVoiceInput" = "Stop Voice Input";
+
+"statusBar.menu.microphone" = "Microphone";
+"statusBar.menu.systemDefault" = "System Default";
+"statusBar.menu.unavailable" = "%@ (Unavailable)";
+
+"statusBar.menu.recentDictations" = "Recent Dictations…";
+"statusBar.menu.setupWizard" = "Setup Wizard...";
+"statusBar.menu.openConfig" = "Open Config Folder...";
+"statusBar.menu.checkUpdates" = "Check for Updates...";
+"statusBar.menu.launchAtLogin" = "Launch at Login";
+"statusBar.menu.quit" = "Quit Velikiy Moguchiy";
+
+
+/* ─── Notifications ─── */
+"notification.error.title" = "Velikiy Moguchiy Error";
+"notification.warning.title" = "Velikiy Moguchiy Warning";
+
+/* ─── Permissions Alerts ─── */
+"permission.microphone.title" = "Microphone Access Required";
+"permission.microphone.message" = "Velikiy Moguchiy needs microphone access to capture your speech for voice input.\n\nPlease grant Microphone permission in System Settings → Privacy & Security → Microphone.";
+"permission.accessibility.title" = "Accessibility Access Required";
+"permission.accessibility.message" = "Velikiy Moguchiy needs Accessibility permission to paste corrected text into your active app.\n\nWithout this, text will be copied to the clipboard but not auto-pasted.\n\nPlease grant access in System Settings → Privacy & Security → Accessibility.";
+"permission.inputMonitoring.title" = "Input Monitoring Required";
+"permission.inputMonitoring.message" = "Velikiy Moguchiy needs Input Monitoring permission to detect the trigger hotkey globally.\n\nWithout this, Velikiy Moguchiy cannot start recording when you press the hotkey.\n\nPlease grant access in System Settings → Privacy & Security → Input Monitoring.";
+"permission.speechRecognition.title" = "Speech Recognition Access Required";
+"permission.speechRecognition.message" = "Velikiy Moguchiy needs Speech Recognition permission to use on-device speech recognition (Apple Speech).\n\nPlease grant access when prompted, or enable it in System Settings → Privacy & Security → Speech Recognition.";
+"permission.button.openSettings" = "Open Settings";
+"permission.button.dismiss" = "Dismiss";
+"permission.button.dontRemind" = "Don't Remind Again";
+
+/* ─── Language Settings ─── */
+"settings.language.title" = "Interface Language";
+"settings.language.followSystem" = "Follow System";
+"settings.language.restartRequired" = "Some UI elements require restarting Velikiy Moguchiy to fully apply the language change.";
+"settings.language.restartTitle" = "Language Changed";
+"settings.language.restartMessage" = "The interface language has been changed. Some elements may require restarting Velikiy Moguchiy to update.";
+"settings.language.restartButton" = "OK";
+
+/* ─── Edit Menu ─── */
+"menu.edit" = "Edit";
+"menu.edit.undo" = "Undo";
+"menu.edit.redo" = "Redo";
+"menu.edit.cut" = "Cut";
+"menu.edit.copy" = "Copy";
+"menu.edit.paste" = "Paste";
+"menu.edit.selectAll" = "Select All";
+
+"error.asr.timeout" = "ASR connection timed out";
+"error.asr.service" = "ASR service error";
+"error.asr.auth" = "ASR authentication failed";
+"error.audio" = "Microphone unavailable";
+"error.asr.unknown" = "ASR error";

@@ -1,0 +1,26 @@
+[project]
+name = "lipread-ru"
+version = "0.1.0"
+description = "Эксперимент: беззвучное чтение по губам на русском (MultiVSR) на Apple Silicon"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    # Версии из requirements.txt MultiVSR (там проверено на Python 3.13.5). Только то, что нужно для инференса.
+    "torch==2.7.1",
+    "torchvision==0.22.1",
+    "numpy==2.2.6",
+    "einops==0.8.1",
+    "linear_attention_transformer==0.19.1",
+    "transformers==4.53.1",
+    "tokenizers==0.21.2",
+    "configargparse==1.7.1",
+    "opencv-python==4.12.0.88",
+    "scipy==1.16.0",
+    "pandas",
+    "tqdm==4.67.1",
+    "pillow==11.3.0",
+    # Для рекордера: выбор встроенной камеры (как в Lipflow), только macOS.
+    "pyobjc-framework-avfoundation>=10.3; sys_platform == 'darwin'",
+]
+
+[tool.uv]
+package = false

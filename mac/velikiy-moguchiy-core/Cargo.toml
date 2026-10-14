@@ -1,0 +1,47 @@
+[package]
+name = "velikiy-moguchiy-core"
+description = "Core library for Velikiy Moguchiy speech recognition"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "velikiy_moguchiy_core"
+crate-type = ["staticlib", "lib"]
+
+[features]
+# wetype-offline is deliberately not a default: it runs Tencent WeType's
+# reverse-engineered embed140m model, which has no license, and must never be
+# part of a public or release build. See velikiy-moguchiy-asr/README.md.
+default = ["mlx", "apple-speech", "sherpa-onnx"]
+mlx = ["velikiy-moguchiy-asr/mlx"]
+apple-speech = ["velikiy-moguchiy-asr/apple-speech"]
+sherpa-onnx = ["velikiy-moguchiy-asr/sherpa-onnx"]
+wetype-offline = ["velikiy-moguchiy-asr/wetype-offline"]
+
+[dependencies]
+async-trait.workspace = true
+velikiy-moguchiy-asr = { path = "../velikiy-moguchiy-asr" }
+env_logger.workspace = true
+futures-util.workspace = true
+log.workspace = true
+rustfft = "6.4.0"
+reqwest = { workspace = true, default-features = false, features = ["json", "rustls-tls", "http2", "stream", "system-proxy"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+serde_yaml.workspace = true
+sha2.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio-util = { workspace = true, features = ["rt"] }
+urlencoding.workspace = true
+uuid = { workspace = true, features = ["v4"] }
+
+[dev-dependencies]
+
+[build-dependencies]
+cbindgen.workspace = true

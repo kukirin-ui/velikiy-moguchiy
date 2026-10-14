@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Вопрос или обсуждение
+    url: https://github.com/zigansh1n/velikiy-moguchiy/discussions
+    about: Как установить, настроить, как что-то устроено — спросите в Discussions
+  - name: Уязвимость
+    url: https://github.com/zigansh1n/velikiy-moguchiy/security/advisories/new
+    about: Сообщите приватно, не в открытом issue
+  - name: Как помочь проекту
+    url: https://github.com/zigansh1n/velikiy-moguchiy/blob/main/CONTRIBUTING.md
+    about: Как собрать, проверить и прислать изменения

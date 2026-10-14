@@ -1,0 +1,11 @@
+{
+  "$schema": "./tools/contributors/contributors.schema.json",
+  "contributors": [
+    {
+      "github": "zigansh1n",
+      "data_hours": 439,
+      "training_steps": 6572,
+      "accepted_updates": 2
+    }
+  ]
+}
