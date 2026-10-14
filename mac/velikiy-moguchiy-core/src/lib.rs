@@ -541,9 +541,8 @@ pub unsafe extern "C" fn sp_core_feed_mic_levels(samples: *const i16, count: u32
     }
     let pcm = unsafe { std::slice::from_raw_parts(samples, count as usize) };
     let peak = pcm.iter().map(|&s| s.unsigned_abs()).max().unwrap_or(0) as f32 / 32768.0;
-    let _ = MIC_PEAK.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |old| {
-        (peak > f32::from_bits(old)).then_some(peak.to_bits())
-    });
+    // Bit patterns of non-negative floats order like the floats themselves.
+    MIC_PEAK.fetch_max(peak.to_bits(), Ordering::SeqCst);
     if let Some(detector) = SILENCE_DETECTOR.lock().unwrap().as_mut() {
         if detector.feed(pcm) {
             SILENCE_STOP_FIRED.store(true, Ordering::SeqCst);
