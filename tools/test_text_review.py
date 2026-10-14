@@ -200,3 +200,25 @@ def test_main_without_a_configured_model(tmp_path, monkeypatch, capsys):
         monkeypatch.setenv("TEXT_REVIEW_TOKEN", token)
         assert t.main(["--base", base, "--head", head]) == 0
         assert "не настроена" in capsys.readouterr().out
+
+
+def test_file_mode_reviews_every_line_and_fails_from_the_chosen_severity(tmp_path, monkeypatch, capsys):
+    notes = tmp_path / "notes.md"
+    notes.write_text("# Выпуск\n\n- Пишите [куда писать].\n")
+    monkeypatch.setattr(t, "PAUSE", 0)
+    monkeypatch.setattr(t, "ENDPOINT", "https://llm.example/v1/chat/completions")
+    monkeypatch.setattr(t, "MODEL", "some-model")
+    monkeypatch.setenv("TEXT_REVIEW_TOKEN", "x")
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    sent = []
+
+    def reply(system, user, token, severity="medium"):
+        sent.append(user)
+        return finding_reply(file=str(notes), line=3, severity=severity)
+    monkeypatch.setattr(t, "ask", reply)
+    assert t.main(["--file", str(notes)]) == 0
+    assert "+    1| # Выпуск" in sent[0] and "+    3| - Пишите [куда писать]." in sent[0]
+    assert t.main(["--file", str(notes), "--fail-on", "medium"]) == 1
+    monkeypatch.setattr(t, "ask", lambda s, u, tok: finding_reply(file=str(notes), line=3, severity="low"))
+    assert t.main(["--file", str(notes), "--fail-on", "medium"]) == 0
+    capsys.readouterr()

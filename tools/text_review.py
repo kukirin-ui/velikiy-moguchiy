@@ -3,6 +3,7 @@
 
   python3 tools/text_review.py --base SHA --head SHA            review, print findings, exit 1 on high severity
   python3 tools/text_review.py --base SHA --head SHA --dry-run  only show what would be sent
+  python3 tools/text_review.py --file NOTES.md --fail-on medium  every line of a generated text, e.g. release notes
 
 The model reads the added lines of changed documents (.md, .txt, issue templates) and reports drafts, internal notes,
 placeholders, personal data, AI attribution and statements that contradict the project's facts. The instructions are
@@ -119,6 +120,12 @@ def parse_diff(path: str, diff: str):
     if cur and cur.added:
         sections.append(cur)
     return sections
+
+
+def whole_file(path: str) -> Section:
+    """A file reviewed in full, as if every line were added."""
+    text = Path(path).read_text(encoding="utf-8")
+    return Section(path, [(no, True, line) for no, line in enumerate(text.splitlines(), 1) if line.strip()])
 
 
 def split_section(sec: Section, limit: int):
@@ -324,15 +331,21 @@ def summary(text: str):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--base", required=True)
-    ap.add_argument("--head", required=True)
+    ap.add_argument("--base")
+    ap.add_argument("--head")
+    ap.add_argument("--file", action="append", default=[], help="review every line of this file (repeatable)")
+    ap.add_argument("--fail-on", choices=SEVERITIES, default="high", help="the lowest severity that fails")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--comment", action="store_true")
     a = ap.parse_args(argv)
+    if not a.file and not (a.base and a.head):
+        ap.error("either --base and --head, or --file")
 
-    sections = []
-    for path in changed_files(a.base, a.head):
-        sections += parse_diff(path, git("diff", "-U3", f"{a.base}...{a.head}", "--", path))
+    sections = [whole_file(path) for path in a.file]
+    if a.base and a.head:
+        for path in changed_files(a.base, a.head):
+            sections += parse_diff(path, git("diff", "-U3", f"{a.base}...{a.head}", "--", path))
+    sections = [s for s in sections if s.added]
     if not sections:
         print("text review: no changed texts")
         return 0
@@ -380,7 +393,8 @@ def main(argv=None):
     gh_token = os.environ.get("GITHUB_TOKEN", "")
     if a.comment and gh_token:
         post_comment(body, gh_token, create=bool(findings or failed))
-    return 1 if any(f.severity == "high" for f in findings) else 0
+    failing = SEVERITIES[:SEVERITIES.index(a.fail_on) + 1]
+    return 1 if any(f.severity in failing for f in findings) else 0
 
 
 if __name__ == "__main__":
