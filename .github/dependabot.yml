@@ -16,6 +16,10 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    # The app links the no-TTS static libraries that scripts/sherpa-onnx-libs.sh downloads for one exact
+    # version; the crate and the script move together, by hand. The Apple build does not run on these PRs.
+    ignore:
+      - dependency-name: "sherpa-onnx*"
     groups:
       rust-minor:
         update-types: [minor, patch]

@@ -36,6 +36,7 @@ jobs:
             rust:
               - "mac/Cargo.toml"
               - "mac/Cargo.lock"
+              - "mac/scripts/sherpa-onnx-libs.sh"
               - "mac/velikiy-moguchiy-*/**"
               - ".github/workflows/tests.yml"
             federated:
@@ -69,6 +70,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: mac
+      - name: sherpa-onnx crate matches the libraries the Mac app links
+        run: |
+          CRATE=$(grep -A1 '^name = "sherpa-onnx-sys"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')
+          LIBS=$(sed -n 's/^VERSION=//p' scripts/sherpa-onnx-libs.sh)
+          if [ "$CRATE" != "$LIBS" ]; then
+            echo "::error::sherpa-onnx-sys $CRATE in Cargo.lock, libraries $LIBS in scripts/sherpa-onnx-libs.sh: the Mac app will not link"
+            exit 1
+          fi
       - name: Test
         run: cargo test --workspace --no-default-features --features velikiy-moguchiy-core/wetype-offline
 
