@@ -131,6 +131,13 @@ static const NSInteger kHeaderItemTag = 1001;
     self.microphoneItem.image = [self menuSymbol:@"music.mic"];
     [menu addItem:self.microphoneItem];
 
+    NSMenuItem *onboarding = [[NSMenuItem alloc] initWithTitle:@"Начало работы…"
+                                                       action:@selector(openOnboarding:)
+                                                keyEquivalent:@""];
+    onboarding.target = self;
+    onboarding.image = [self menuSymbol:@"checklist"];
+    [menu addItem:onboarding];
+
     NSMenuItem *setupWizard = [[NSMenuItem alloc] initWithTitle:@"Настройки…"
                                                         action:@selector(openSetupWizard:)
                                                  keyEquivalent:@","];
@@ -783,6 +790,12 @@ static const NSInteger kHeaderItemTag = 1001;
 - (void)openRecentDictations:(id)sender {
     if ([self.delegate respondsToSelector:@selector(statusBarDidSelectRecentDictations)]) {
         [self.delegate statusBarDidSelectRecentDictations];
+    }
+}
+
+- (void)openOnboarding:(id)sender {
+    if ([self.delegate respondsToSelector:@selector(statusBarDidSelectOnboarding)]) {
+        [self.delegate statusBarDidSelectOnboarding];
     }
 }
 

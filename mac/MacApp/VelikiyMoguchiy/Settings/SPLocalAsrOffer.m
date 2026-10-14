@@ -72,6 +72,21 @@ static NSString *providerTitle(NSString *provider) {
     [self downloadAndSwitchTo:choice];
 }
 
++ (NSDictionary *)currentAsrConfig {
+    return asrConfig();
+}
+
+- (BOOL)canSwitchToLocalAsr {
+    return [SPLocalAsrPolicy shouldOfferLocalAsrWithAsrConfig:asrConfig()
+                                      supportedLocalProviders:[self.rustBridge supportedLocalProviders]];
+}
+
+- (void)switchToLocalAsrOnUserRequest {
+    if (self.busy || ![self canSwitchToLocalAsr]) return;
+    [self downloadAndSwitchTo:[SPLocalAsrPolicy
+                                  localChoiceForSupportedProviders:[self.rustBridge supportedLocalProviders]]];
+}
+
 - (void)downloadAndSwitchTo:(NSDictionary<NSString *, NSString *> *)choice {
     NSString *model = choice[@"model"];
     SPRustBridge *bridge = self.rustBridge;

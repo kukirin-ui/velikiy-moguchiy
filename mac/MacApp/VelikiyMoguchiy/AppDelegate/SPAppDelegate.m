@@ -23,6 +23,7 @@
 #import "SPLipsService.h"
 #import "SPLipsRuntime.h"
 #import "SPLocalAsrOffer.h"
+#import "SPOnboardingWindowController.h"
 #import "SPAppUpdateChecker.h"
 #import "SPProblemReportWindowController.h"
 #import "SPRecentDictationsWindowController.h"
@@ -124,6 +125,9 @@
 @property (nonatomic, strong) NSTimer *recordingCapTimer;
 // Judges the focused element before a paste (password field, no field at all).
 @property (nonatomic, strong) SPAccessibilityManager *accessibilityManager;
+@property (nonatomic, strong) SPOnboardingWindowController *onboarding;
+// A first launch: «Начало работы» takes the place of the separate prompts and offers.
+@property (nonatomic, assign) BOOL onboardingAtLaunch;
 @property (nonatomic, assign) SPSessionPurpose pendingSessionPurpose;
 @property (nonatomic, assign) SPSessionPurpose sessionPurpose;
 // Session result metadata delivered just before the final text; consumed
@@ -536,12 +540,16 @@ static BOOL SPLabFlag(const char *name) {
     self.overlayPanel.delegate = self;
 
     [SPLipsRuntime sharedRuntime].rustBridge = self.rustBridge;
+    self.onboardingAtLaunch = [SPOnboardingWindowController shouldShowAtLaunch];
     [self startUpdateAndSetupChecks];
 
     // Clicks on error notifications open the place that fixes the error.
     [UNUserNotificationCenter currentNotificationCenter].delegate = self;
-    // Request notification permission
-    [self.permissionManager requestNotificationPermission];
+    // On a first launch «Начало работы» asks for notifications when the user
+    // wants them, instead of one more system prompt at launch.
+    if (!self.onboardingAtLaunch) {
+        [self.permissionManager requestNotificationPermission];
+    }
 
     // Request Speech Recognition permission if Apple Speech is the configured provider
     char *rawProvider = sp_config_get("asr.provider");
@@ -613,7 +621,10 @@ static BOOL SPLabFlag(const char *name) {
 
         // Alerts are modal: shown once everything above is running.
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (lostPermissions.count > 0) {
+            if (self.onboardingAtLaunch) {
+                // Its checklist covers the microphone, the key and the 🌐 clash.
+                [self statusBarDidSelectOnboarding];
+            } else if (lostPermissions.count > 0) {
                 [self.permissionManager showLostAccessAlertForTypes:lostPermissions];
             } else if (!micGranted) {
                 [self.cuePlayer playError];
@@ -755,7 +766,8 @@ static BOOL SPLabFlag(const char *name) {
     };
     // After the launch has settled, so the offer does not land on top of the permission prompts.
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (!weakSelf.quitting && sessionStateAllowsConfigReload(weakSelf.sessionState)) {
+        if (!weakSelf.quitting && !weakSelf.onboardingAtLaunch &&
+            sessionStateAllowsConfigReload(weakSelf.sessionState)) {
             [weakSelf.localAsrOffer offerIfNeeded];
         }
     });
@@ -3017,6 +3029,18 @@ static BOOL SPLabFlag(const char *name) {
 
 - (void)statusBarDidSelectSetupWizard {
     [self showSettingsPane:nil];
+}
+
+- (void)statusBarDidSelectOnboarding {
+    if (!self.onboarding) {
+        self.onboarding = [[SPOnboardingWindowController alloc] initWithPermissionManager:self.permissionManager
+                                                                            localAsrOffer:self.localAsrOffer];
+        __weak typeof(self) weakSelf = self;
+        self.onboarding.openSettingsPane = ^(NSString *pane) {
+            [weakSelf showSettingsPane:pane];
+        };
+    }
+    [self.onboarding present];
 }
 
 /// The Settings window, on `pane` when given (asr, llm, hotkey, …).

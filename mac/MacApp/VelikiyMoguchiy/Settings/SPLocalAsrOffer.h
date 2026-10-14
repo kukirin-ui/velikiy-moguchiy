@@ -20,6 +20,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// never again after «Не сейчас».
 - (void)offerIfNeeded;
 
+/// The `asr` section of the config as JSON.
++ (NSDictionary *)currentAsrConfig;
+
+/// Whether this build can switch to a local model now (a cloud provider
+/// without a key, and a local model this build can run).
+- (BOOL)canSwitchToLocalAsr;
+
+/// The user asked for local recognition (the «Начало работы» window): download
+/// and switch without asking again. Same checks as the offer.
+- (void)switchToLocalAsrOnUserRequest;
+
 @end
 
 NS_ASSUME_NONNULL_END

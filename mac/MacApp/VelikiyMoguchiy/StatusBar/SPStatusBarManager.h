@@ -8,6 +8,8 @@
 - (void)statusBarDidSelectReloadConfig;
 - (void)statusBarDidSelectQuit;
 - (void)statusBarDidSelectSetupWizard;
+/// "Начало работы…".
+- (void)statusBarDidSelectOnboarding;
 - (void)statusBarDidSelectRecentDictations;
 - (void)statusBarMenuDidOpen;
 - (void)statusBarMenuDidClose;
