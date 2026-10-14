@@ -37,7 +37,7 @@ def social_preview():
         body.append(krin(x, band_y + 128, 72, sw=1.0))
         body.append(f'<g transform="translate({f(x + side * 38)},{band_y + 96}) scale({side},1)">'
                     f'{scroll_pair(46, 0, 92, 28, OCHRE, 2.8)}</g>')
-    body.append(f'<path d="{text_path("русская голосовая диктовка для Mac и iPhone", MONOMAKH, 34, cx, band_y + 186, "middle")}" '
+    body.append(f'<path d="{text_path("русская голосовая диктовка для Mac, iPhone, Android и Windows", MONOMAKH, 34, cx, band_y + 186, "middle")}" '
                 f'fill="{UMBER}"/>')
     body.append(f'<path d="{text_path("распознавание речи · чтение по губам · открытый код", SERIF_ITALIC, 24, cx, band_y + 232, "middle")}" '
                 f'fill="{CINNABAR}"/>')

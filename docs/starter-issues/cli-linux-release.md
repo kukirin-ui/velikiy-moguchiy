@@ -4,7 +4,7 @@ labels: good first issue,enhancement
 ---
 
 `velikiy-moguchiy-cli` (распознавание файла, словарь, бенчмарк провайдеров) не зависит от macOS, но в релизе есть
-только приложения для Mac и iPhone.
+только приложения для Mac, iPhone, Android и Windows, а сборки для Linux нет.
 
 **Что сделать.** В [`.github/workflows/release.yml`](https://github.com/zigansh1n/velikiy-moguchiy/blob/main/.github/workflows/release.yml) добавить задание на
 `ubuntu-latest`, которое собирает `cargo build --release -p velikiy-moguchiy-cli` для `x86_64-unknown-linux-gnu`,

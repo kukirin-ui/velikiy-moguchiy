@@ -1,4 +1,4 @@
-<p align="center"><img src="design/readme/banner.svg" width="100%" alt="«Великий &amp; Могучий» — русская голосовая диктовка для Mac и iPhone"><br>
+<p align="center"><img src="design/readme/banner.svg" width="100%" alt="«Великий &amp; Могучий» — русская голосовая диктовка для Mac, iPhone, Android и Windows"><br>
 <sub><i>В. М. Васнецов. «Богатыри» (1881–1898), фрагмент. Общественное достояние, Wikimedia Commons. Рамка, вязь и орнамент — свои.</i></sub></p>
 
 <p align="center">
@@ -10,7 +10,7 @@
   <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fzigansh1n%2Fvelikiy-moguchiy%2Fmain%2Fcontributors.json&amp;query=%24.contributors.length&amp;label=%D1%83%D1%87%D0%B0%D1%81%D1%82%D0%BD%D0%B8%D0%BA%D0%B8&amp;color=6B6433&amp;labelColor=32261E" alt="Участники"></a>
 </p>
 
-<img src="design/readme/initial-r.svg" align="left" width="92" alt="Р">усский голосовой ввод для Mac и iPhone: говорите — и текст появляется там, где стоит курсор.
+<img src="design/readme/initial-r.svg" align="left" width="92" alt="Р">усский голосовой ввод для Mac, iPhone, Android и Windows: говорите — и текст появляется там, где стоит курсор.
 Распознаёт, расставляет знаки, при желании правит текст языковой моделью и вставляет его в любое приложение.
 <br clear="left">
 

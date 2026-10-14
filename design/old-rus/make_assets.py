@@ -131,7 +131,7 @@ def banner():
         body.append(krin(x, band_y + 116, 64, sw=1.0))
         body.append(f'<g transform="translate({f(x + side_ * 34)},{band_y + 88}) scale({side_},1)">'
                     f'{scroll_pair(42, 0, 84, 26, OCHRE, 2.6)}</g>')
-    sub = "русская голосовая диктовка для Mac и iPhone"
+    sub = "русская голосовая диктовка для Mac, iPhone, Android и Windows"
     from ornament import MONOMAKH
     body.append(f'<path d="{text_path(sub, MONOMAKH, 27, cx, band_y + 158, "middle")}" fill="{UMBER}"/>')
     write(README_DIR / "banner.svg", svg(W, H, "".join(body), gold_gradient(),
