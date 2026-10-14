@@ -99,10 +99,16 @@ class ModelSync:
         self.cfg, self.spec, self.tr = cfg, spec, transport
         self.store = AdapterStore(cfg.adapters_dir)
 
+    def fetch_latest(self) -> ModelInfo:
+        return ModelInfo.model_validate(self.tr.request("GET", "/v1/model/latest").json())
+
+    def fetch_adapter(self, info: ModelInfo) -> bytes:
+        return self.tr.request("GET", info.download_path).content
+
     def fetch_info(self) -> ModelInfo:
         if not self.cfg.server.signing_public_key:
             raise ValueError("server.signing_public_key не задан: без закреплённого ключа модель не принимается")
-        info = ModelInfo.model_validate(self.tr.request("GET", "/v1/model/latest").json())
+        info = self.fetch_latest()
         verify_model_info(info, self.cfg.server.signing_public_key)
         if info.spec_hash != self.spec.hash or info.spec_id != self.spec.spec_id:
             raise ProtocolError("spec_mismatch", "сервер отдаёт адаптер другой спецификации (обновите приложение)")
@@ -120,7 +126,7 @@ class ModelSync:
         limit = 4 * self.spec.num_params + SLACK
         if info.size_bytes > limit:
             raise ProtocolError("too_large", f"размер адаптера {info.size_bytes} Б больше ожидаемого {limit}")
-        data = self.tr.request("GET", info.download_path).content
+        data = self.fetch_adapter(info)
         if len(data) != info.size_bytes or hashlib.sha256(data).hexdigest() != info.sha256:
             raise ProtocolError("bad_payload", "размер или SHA-256 скачанного адаптера не совпали с подписанным описанием")
         check_safetensors_header(data)
@@ -137,3 +143,28 @@ class ModelSync:
         if v is None:
             raise FileNotFoundError("глобальный адаптер ещё не загружен")
         return v, load_adapter(self.store.path(v))
+
+
+class HubModelSync(ModelSync):
+    """Версии прямо из открытого репозитория модели (index.json и versions/, hub/registry.py), без сервера приёма.
+    Доверие то же: описание версии подписано закреплённым ключом, файл сверяется с подписанными SHA-256 и размером."""
+
+    def __init__(self, cfg: ClientConfig, spec: AdapterSpec, base_url: str, http):
+        super().__init__(cfg, spec, transport=None)
+        self.base, self.http = base_url.rstrip("/"), http
+
+    def _get(self, path: str) -> bytes:
+        r = self.http.get(f"{self.base}/{path}", follow_redirects=True)
+        r.raise_for_status()
+        return r.content
+
+    def fetch_latest(self) -> ModelInfo:
+        idx = json.loads(self._get("index.json"))
+        cur = idx.get("current")
+        rec = next((v for v in idx.get("versions", []) if v.get("version") == cur and v.get("status") == "active"), None)
+        if rec is None:
+            raise ProtocolError("not_found", "в репозитории модели нет текущей версии общего адаптера")
+        return ModelInfo.model_validate(rec["info"])
+
+    def fetch_adapter(self, info: ModelInfo) -> bytes:
+        return self._get(f"versions/v{info.version:06d}.safetensors")

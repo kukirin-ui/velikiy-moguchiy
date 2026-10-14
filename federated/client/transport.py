@@ -66,7 +66,13 @@ def build_http_client(cfg: ServerCfg) -> httpx.Client:
     if u.scheme != "https":
         raise ValueError(f"неподдерживаемая схема {u.scheme}")
     if not cfg.tls_spki_sha256:
-        raise ValueError("для https:// нужен tls_spki_sha256 (закрепление ключа сервера)")
+        if not cfg.tls_system_trust:
+            raise ValueError("для https:// нужен tls_spki_sha256 (закрепление ключа сервера)")
+        # the downloaded adapter is still checked against the pinned model-signing key
+        import certifi  # an httpx dependency; python.org builds on macOS have no system CA file
+        ctx = ssl.create_default_context(cafile=certifi.where())
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        return httpx.Client(base_url=cfg.url, timeout=cfg.timeout_seconds, verify=ctx, trust_env=False)
     ctx = PinnedSSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.pin = cfg.tls_spki_sha256
     ctx.check_hostname = True

@@ -4,3 +4,5 @@ __pycache__/
 sim_out/
 server_data/
 .pytest_cache/
+node_modules/
+.wrangler/

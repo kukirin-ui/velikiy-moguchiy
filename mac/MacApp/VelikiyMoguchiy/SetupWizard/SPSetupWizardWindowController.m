@@ -1,4 +1,5 @@
 #import "SPSetupWizardWindowController.h"
+#import "SPCommunityTrainingCard.h"
 #import "SPLipCaptureManager.h"
 #import "SPLipDataPolicy.h"
 #import "SPLipsRuntime.h"
@@ -2939,6 +2940,8 @@ static NSString *SPCondensedProviderError(NSString *raw) {
   NSView *lipdataCard = [self lipdataCardWithWidth:cardWidth];
   // ── «Обучить на мне» (LipTraining/SPLipTrainingCard: builds and runs itself) ──
   NSView *lipTrainingCard = [[SPLipTrainingCard alloc] initWithWidth:cardWidth];
+  // ── «Помочь обучить» (CommunityTraining/SPCommunityTrainingCard: builds and runs itself) ──
+  NSView *communityCard = [[SPCommunityTrainingCard alloc] initWithWidth:cardWidth];
 
   // ── Layout ──
   CGFloat triggerH = triggerCard.frame.size.height;
@@ -2948,10 +2951,11 @@ static NSString *SPCondensedProviderError(NSString *raw) {
   CGFloat historyH = historyCard.frame.size.height;
   CGFloat lipdataH = lipdataCard.frame.size.height;
   CGFloat lipTrainingH = lipTrainingCard.frame.size.height;
+  CGFloat communityH = communityCard.frame.size.height;
   CGFloat contentHeight = topPad + triggerH + cardSpacing + pasteH +
                           cardSpacing + feedbackH + cardSpacing + recordingH +
                           cardSpacing + historyH + cardSpacing + lipdataH +
-                          cardSpacing + lipTrainingH + 56;
+                          cardSpacing + lipTrainingH + cardSpacing + communityH + 56;
 
   NSView *pane =
       [[NSView alloc] initWithFrame:NSMakeRect(0, 0, paneWidth, contentHeight)];
@@ -3010,6 +3014,10 @@ static NSString *SPCondensedProviderError(NSString *raw) {
   y -= cardSpacing + lipTrainingH;
   lipTrainingCard.frame = NSMakeRect(24, y, cardWidth, lipTrainingH);
   [pane addSubview:lipTrainingCard];
+
+  y -= cardSpacing + communityH;
+  communityCard.frame = NSMakeRect(24, y, cardWidth, communityH);
+  [pane addSubview:communityCard];
 
   return pane;
 }

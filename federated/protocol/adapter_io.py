@@ -14,13 +14,29 @@ from .spec import AdapterSpec
 MAX_HEADER_BYTES = 256 * 1024
 
 
+FOREIGN_FORMATS = (
+    (b"PK\x03\x04", "zip (torch.save)"),
+    (b"\x93NUMPY", "numpy"),
+    (b"\x89HDF", "HDF5"),
+)
+
+
 def check_safetensors_header(data: bytes) -> None:
-    """Дешёвая проверка заголовка до полного разбора (защита от гигантского заголовка)."""
+    """Дешёвая проверка заголовка до полного разбора (защита от гигантского заголовка). Принимается только
+    safetensors: pickle, torch.save и прочие форматы, которые могут нести исполняемый код, отвергаются по сигнатуре."""
+    for magic, name in FOREIGN_FORMATS:
+        if data.startswith(magic):
+            raise ProtocolError("bad_payload", f"принимается только safetensors, а это {name}")
+    # a safetensors header length may also start with 0x80, so the JSON brace at offset 8 decides
+    if data[:1] == b"\x80" and data[8:9] != b"{":
+        raise ProtocolError("bad_payload", "принимается только safetensors, а это pickle")
     if len(data) < 8:
         raise ProtocolError("bad_payload", "файл короче заголовка safetensors")
     hlen = int.from_bytes(data[:8], "little")
     if hlen > MAX_HEADER_BYTES or 8 + hlen > len(data):
         raise ProtocolError("bad_payload", f"некорректная длина заголовка safetensors: {hlen}")
+    if data[8:9] != b"{":
+        raise ProtocolError("bad_payload", "заголовок safetensors не JSON")
 
 
 def dumps_adapter(tensors: Mapping[str, np.ndarray], metadata: dict | None = None) -> bytes:

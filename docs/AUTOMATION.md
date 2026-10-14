@@ -19,6 +19,8 @@
 | Черновик релиза с файлами сборки | тег `v*` (теги ставятся вручную, черновик публикуется вручную) | `.github/workflows/release.yml`, `.github/release-notes.md` |
 | Формула Homebrew и источник AltStore | при публикации или удалении релиза | `.github/workflows/stores.yml`, `tools/homebrew/`, `tools/altstore/` |
 | Ярлыки «good first issue» и «help wanted» | при изменении `tools/labels/labels.json` | `.github/workflows/labels.yml` |
+| «Помочь обучить»: сервер приёма на Cloudflare Workers | push в `main`, меняющий `federated/worker/` | `.github/workflows/federated-worker.yml` |
+| «Помочь обучить»: экзамен, слияние, новая версия адаптера, таблица участников | раз в день | `.github/workflows/federated-aggregate.yml` |
 
 ## Что сделать владельцу один раз
 
@@ -91,6 +93,96 @@ OpenAI-совместимый API и оставляет замечания в PR
 Бесплатной суточной квоты Cloudflare Workers AI (10 000 нейронов) хватает примерно на 40 запросов в день; один PR
 с правкой документа — обычно один-два запроса, не больше 10. Пока не задано что-то из трёх, проверка пишет «модель не
 настроена» и проходит. GitHub Models, на которую проверка рассчитывалась сначала, закрыта GitHub 30 июля 2026 г.
+
+## «Помочь обучить»: что сделать один раз
+
+Участники обучают модель чтения по губам у себя и присылают только обновление весов. Сервер приёма — Cloudflare
+Worker (`federated/worker/`), хранение — Hugging Face (аккаунт `z1gansh1n`), проверка и публикация — GitHub
+Actions. Пока шагов ниже нет, оба процесса пропускаются и проверки остаются зелёными. Подробности, формат экзамена
+и пула: [`federated/docs/DEPLOY.md`](../federated/docs/DEPLOY.md).
+
+Уже готово: аккаунт Cloudflare проекта; закрытые датасеты `z1gansh1n/velikiy-moguchiy-inbox` и
+`z1gansh1n/velikiy-moguchiy-exam`, открытый `z1gansh1n/velikiy-moguchiy-lips` (версии адаптера); секреты
+`CLOUDFLARE_ACCOUNT_ID`, `FL_TASK_SECRET`, `FL_MODEL_SIGNING_KEY`, `BOT_PUSH_KEY`; переменные `FL_INBOX`, `FL_MODELS`,
+`FL_EXAM_REPO`; открытый ключ подписи — в `federated/client/community_defaults.py`. Осталось задать `HF_TOKEN`
+(fine-grained с записью в `velikiy-moguchiy-lips` и `velikiy-moguchiy-inbox`) и шаги ниже.
+
+1. **Аккаунт Cloudflare** — отдельный аккаунт проекта «velikiy-moguchiy» (бесплатный план), не личный. Поддомен
+   `workers.dev` (`velikiy-moguchiy`) деплой регистрирует сам, если его ещё нет; адрес сервера —
+   `https://velikiy-moguchiy-train.velikiy-moguchiy.workers.dev`.
+2. **Токен Cloudflare.** <https://dash.cloudflare.com/profile/api-tokens> → **Create Token** → Custom: права
+   **Workers Scripts: Edit**, **Workers KV Storage: Edit**, **Account Settings: Read**, только для аккаунта
+   «velikiy-moguchiy», без зон. Скопируйте токен.
+3. **Account ID** аккаунта проекта: главная страница аккаунта в Cloudflare, справа.
+4. **Секреты** (каждая команда спросит значение):
+
+   ```bash
+   gh secret set CLOUDFLARE_API_TOKEN -R zigansh1n/velikiy-moguchiy
+   ```
+
+   ```bash
+   gh secret set CLOUDFLARE_ACCOUNT_ID -R zigansh1n/velikiy-moguchiy
+   ```
+
+5. **Два узких токена Hugging Face** (<https://huggingface.co/settings/tokens> → Create new token → **Fine-grained**):
+   - `HF_INTAKE_TOKEN` — для Worker: только **запись** в `z1gansh1n/velikiy-moguchiy-inbox`, больше ничего;
+   - `HF_READ_TOKEN` — для оценки в агрегаторе: только **чтение** `z1gansh1n/velikiy-moguchiy-inbox` и
+     `z1gansh1n/velikiy-moguchiy-exam`.
+
+   ```bash
+   gh secret set HF_INTAKE_TOKEN -R zigansh1n/velikiy-moguchiy
+   ```
+
+   ```bash
+   gh secret set HF_READ_TOKEN -R zigansh1n/velikiy-moguchiy
+   ```
+
+   Общий `HF_TOKEN` с записью получает только шаг публикации агрегатора.
+6. **Вход участников через GitHub.** <https://github.com/settings/applications/new>: имя `Великий & Могучий`, оба
+   адреса `https://github.com/zigansh1n/velikiy-moguchiy`, галочка **Enable Device Flow** → Register. Client secret
+   не нужен. Скопируйте **Client ID**:
+
+   ```bash
+   gh variable set FL_GITHUB_CLIENT_ID -R zigansh1n/velikiy-moguchiy -b "<client-id>"
+   ```
+
+7. **Развернуть.** Actions → **Federated intake deploy** → Run workflow. Процесс проверяет, что поддомен аккаунта
+   именно `velikiy-moguchiy`, создаёт хранилище лимитов (KV), кладёт в Worker секреты (`HF_INTAKE_TOKEN`,
+   `FL_TASK_SECRET`), публикует его и, если адрес изменился, коммитит его в `federated/client/community_defaults.py`.
+   Проверка: `https://velikiy-moguchiy-train.velikiy-moguchiy.workers.dev/v1/health`.
+8. **Пул роликов и экзамен** (на поде, где лежат данные сборщика; не на Mac): `federated/docs/DEPLOY.md`, раздел
+   «Пул роликов и скрытый экзамен». Пока экзамена нет, ежедневный раунд пропускается; пока нет пула, сервер честно
+   отвечает, что заданий нет.
+9. **Первая версия.** Actions → **Federated aggregation** → Run workflow: берёт LoRA из lips-0.1, считает WER на
+   экзамене и публикует v1; дальше раунд идёт сам раз в день и публикует версию, только когда на экзамене прошли
+   хотя бы 5 обновлений.
+
+Необязательно: `MODELS_REPO_TOKEN` — fine-grained токен GitHub на `velikiy-moguchiy-models` (Contents: write), чтобы
+каждая версия адаптера выходила ещё и релизом там.
+
+Секреты и переменные, которые читают эти процессы (если репозиторий снова пересоздаётся, задайте заново; новые
+ключи можно просто сгенерировать — подписанных версий пока нет):
+
+| Имя | Вид | Кто читает |
+|---|---|---|
+| `HF_TOKEN` | секрет | только шаг публикации и отката агрегатора (запись в реестр и во входящие) |
+| `HF_READ_TOKEN` | секрет | только шаг скачивания в оценке агрегатора (чтение входящих и экзамена) |
+| `HF_INTAKE_TOKEN` | секрет | деплой (уходит в секреты Worker: запись во входящие) |
+| `FL_MODEL_SIGNING_KEY` | секрет | только шаг публикации и отката агрегатора; открытая часть — файл `federated/client/community_defaults.py` |
+| `FL_TASK_SECRET` | секрет | деплой (уходит в секреты Worker) |
+| `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | секреты | деплой |
+| `MODELS_REPO_TOKEN` | секрет, необязательно | агрегатор (релиз-зеркало) |
+| `BOT_PUSH_KEY` | секрет | коммиты адреса сервера и таблицы участников |
+| `FL_INBOX`, `FL_MODELS`, `FL_EXAM_REPO` | переменные | агрегатор, деплой |
+| `FL_GITHUB_CLIENT_ID` | переменная | деплой |
+| `FL_MAX_UPDATES_PER_DAY`, `FL_MAX_TASKS_PER_DAY`, `FL_MIN_ACCOUNT_AGE_DAYS`, `FL_BANNED_LOGINS`, `FL_EXAM_LIMIT` | переменные, необязательно | деплой, агрегатор |
+
+Новый ключ подписи (закрытая часть сразу уходит в секрет и нигде не печатается, открытая записывается в
+`community_defaults.py` — его нужно закоммитить; версии со старой подписью приложение после этого не примет):
+
+```bash
+uv run --with cryptography python federated/aggregator/keys.py
+```
 
 ## Со-мейнтейнеры
 

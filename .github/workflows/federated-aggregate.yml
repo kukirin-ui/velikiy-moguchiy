@@ -1,0 +1,243 @@
+name: Federated aggregation
+
+# Once a day: score the weight updates participants sent (private HF inbox) on the hidden exam (private HF dataset),
+# then publish a new adapter version, signed, to the public HF model repo and credit contributors.json. Code:
+# federated/aggregator/run.py. Setup: docs/AUTOMATION.md, federated/docs/DEPLOY.md.
+#
+# Two jobs on separate runners keep the signing key away from the MultiVSR code the exam runs:
+#   score    - a read-only HF token in the fetch step only; the exam then runs offline with no secrets at all and
+#              writes a plan (decisions and the SHA-256 of the merge) as an artifact;
+#   publish  - no torch, no MultiVSR: re-checks the base and its signature, re-verifies the accepted updates,
+#              rebuilds the merge itself and publishes only if it matches the plan. The signing key and the HF write
+#              token exist in that one step.
+# Without the secrets and variables, or without the exam in its dataset, it only notes what is missing.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only score and report, publish nothing"
+        type: boolean
+        default: false
+      rollback_to:
+        description: "Roll back to version N instead of running a round (empty = normal round)"
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: federated-aggregate
+  cancel-in-progress: false
+
+env:
+  FL_INBOX: ${{ vars.FL_INBOX }}
+  FL_MODELS: ${{ vars.FL_MODELS }}
+  FL_EXAM_REPO: ${{ vars.FL_EXAM_REPO }}
+  ROLLBACK_TO: ${{ inputs.rollback_to }}
+
+jobs:
+  score:
+    name: Exam (no secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    outputs:
+      kind: ${{ steps.score.outputs.kind }}
+    env:
+      FL_EXAM_LIMIT: ${{ vars.FL_EXAM_LIMIT }}
+      FL_LIPREAD_DIR: ${{ github.workspace }}/lipread
+      MULTIVSR_COMMIT: af28d8c4b687ee7e41942732eb240e0cdfff3ccd
+      MODEL_PTH_SHA256: cd89f095cb3c653bacea5d18155b2235d78f9c36bd001db7aef60cca2a0cbf2c
+    steps:
+      - name: Check configuration
+        id: cfg
+        env:
+          HF_READ_TOKEN: ${{ secrets.HF_READ_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          FL_MODEL_SIGNING_KEY: ${{ secrets.FL_MODEL_SIGNING_KEY }}
+        run: |
+          missing=""
+          for v in HF_READ_TOKEN HF_TOKEN FL_MODEL_SIGNING_KEY FL_INBOX FL_MODELS FL_EXAM_REPO; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "### Federated aggregation skipped: not configured ($missing). See docs/AUTOMATION.md" >> "$GITHUB_STEP_SUMMARY"
+          elif [ -n "$ROLLBACK_TO" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          python-version: "3.13"
+
+      - name: Install (light)
+        if: steps.cfg.outputs.ready == 'true'
+        run: python -m pip install numpy==2.2.6 safetensors cryptography pydantic httpx huggingface_hub
+
+      - name: Fetch the inbox, the current version and the exam (read-only token, this step only)
+        id: fetch
+        if: steps.cfg.outputs.ready == 'true'
+        working-directory: federated
+        env:
+          HF_READ_TOKEN: ${{ secrets.HF_READ_TOKEN }}
+        run: |
+          python -m aggregator.run fetch --to "$RUNNER_TEMP/round"
+          python - <<'EOF'
+          import os
+          from huggingface_hub import snapshot_download
+          snapshot_download(os.environ["FL_EXAM_REPO"], repo_type="dataset", token=os.environ["HF_READ_TOKEN"],
+                            local_dir=os.path.join(os.environ["RUNNER_TEMP"], "exam"))
+          EOF
+          if [ -s "$RUNNER_TEMP/exam/exam.jsonl" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "### Federated aggregation skipped: the exam dataset has no exam.jsonl yet (federated/docs/DEPLOY.md)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Install (CPU torch and the MultiVSR inference dependencies)
+        if: steps.fetch.outputs.ready == 'true'
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          python -m pip install einops==0.8.1 linear_attention_transformer==0.19.1 transformers==4.53.1 tokenizers==0.21.2 \
+            configargparse==1.7.1 opencv-python-headless scipy pandas tqdm pillow
+
+      - name: Cache MultiVSR code and weights
+        if: steps.fetch.outputs.ready == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            lipread/multivsr
+            lipread/weights/model.pth
+          key: multivsr-${{ env.MULTIVSR_COMMIT }}-model-${{ env.MODEL_PTH_SHA256 }}
+
+      - name: MultiVSR code (authors' repository, pinned commit) and base weights (pinned SHA-256)
+        if: steps.fetch.outputs.ready == 'true'
+        working-directory: lipread
+        run: |
+          if [ ! -d multivsr/.git ]; then
+            git init -q multivsr
+            git -C multivsr remote add origin https://github.com/Sindhu-Hegde/multivsr
+            git -C multivsr fetch -q --depth 1 origin "$MULTIVSR_COMMIT"
+            git -C multivsr checkout -q FETCH_HEAD
+          fi
+          python multivsr_compat.py multivsr || true
+          mkdir -p weights
+          if [ ! -s weights/model.pth ]; then
+            curl -L --fail --retry 5 --retry-delay 10 -o weights/model.pth https://www.robots.ox.ac.uk/~vgg/research/multivsr/model.pth
+          fi
+          echo "$MODEL_PTH_SHA256  weights/model.pth" | sha256sum -c -
+
+      - name: Score (offline, no secrets)
+        id: score
+        if: steps.fetch.outputs.ready == 'true'
+        working-directory: federated
+        env:
+          FL_INBOX: dir:${{ runner.temp }}/round/inbox
+          FL_MODELS: dir:${{ runner.temp }}/round/models
+          FL_EXAM_DIR: ${{ runner.temp }}/exam
+        run: python -m aggregator.run score --out "$RUNNER_TEMP/plan.json"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.fetch.outputs.ready == 'true'
+        with:
+          name: plan
+          path: ${{ runner.temp }}/plan.json
+          retention-days: 7
+
+  publish:
+    name: Publish (signing key)
+    needs: score
+    if: needs.score.outputs.kind != '' && needs.score.outputs.kind != 'no_base' && inputs.dry_run != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.BOT_PUSH_KEY }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install (light, no torch)
+        run: python -m pip install numpy==2.2.6 safetensors cryptography pydantic httpx huggingface_hub
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: ${{ runner.temp }}
+
+      - name: Publish (the only step with the signing key and the HF write token)
+        id: publish
+        working-directory: federated
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          FL_MODEL_SIGNING_KEY: ${{ secrets.FL_MODEL_SIGNING_KEY }}
+        run: python -m aggregator.run publish --plan "$RUNNER_TEMP/plan.json" --contributors ../contributors.json
+
+      - name: Mirror the new version to a GitHub release
+        if: steps.publish.outputs.version != ''
+        working-directory: federated
+        env:
+          GH_TOKEN: ${{ secrets.MODELS_REPO_TOKEN }}
+          VERSION: ${{ steps.publish.outputs.version }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "MODELS_REPO_TOKEN is not set: no release mirror"
+            exit 0
+          fi
+          python -m aggregator.run export --version "$VERSION" --out "$RUNNER_TEMP/release"
+          gh release create "lips-adapter-v$VERSION" -R zigansh1n/velikiy-moguchiy-models \
+            --title "lips-adapter v$VERSION" \
+            --notes "Общий адаптер LoRA, версия $VERSION: обучен силами участников и проверен на скрытом экзамене. Описание версии подписано (файл .json)." \
+            "$RUNNER_TEMP"/release/*
+
+      - name: Commit the contributors table
+        if: steps.publish.outputs.version != ''
+        env:
+          VERSION: ${{ steps.publish.outputs.version }}
+        run: |
+          if git diff --quiet -- contributors.json; then
+            echo "contributors.json unchanged"
+            exit 0
+          fi
+          python3 tools/contributors/render.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Contributors: lips adapter v$VERSION" -- contributors.json README.md
+          git push
+
+  rollback:
+    name: Roll back (signing key)
+    if: inputs.rollback_to != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install (light, no torch)
+        run: python -m pip install numpy==2.2.6 safetensors cryptography pydantic httpx huggingface_hub
+      - name: Roll back
+        working-directory: federated
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          FL_MODEL_SIGNING_KEY: ${{ secrets.FL_MODEL_SIGNING_KEY }}
+        run: python -m aggregator.run rollback --to "$ROLLBACK_TO" --reason "вручную из GitHub Actions"

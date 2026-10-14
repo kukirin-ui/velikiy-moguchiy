@@ -32,6 +32,7 @@ class ServerCfg:
     tls_spki_sha256: str = ""           # hex SHA-256 от SubjectPublicKeyInfo сертификата сервера (закрепление)
     tls_ca_file: str = ""               # доверенный корень/самоподписанный сертификат; пусто = системные
     allow_insecure_localhost: bool = False  # http:// допустим ТОЛЬКО для localhost (разработка, симуляция)
+    tls_system_trust: bool = False      # https без закрепления, по системным корням (сервер приёма: сертификаты меняет хостинг)
     timeout_seconds: float = 120.0
     retry_attempts: int = 5
     retry_base_seconds: float = 5.0
@@ -72,11 +73,25 @@ class GuardCfg:
 
 
 @dataclass
+class CommunityCfg:
+    """«Помочь обучить» (client/community.py): сервер приёма (Cloudflare Worker) и задания с роликами."""
+    server_url: str = ""                # пусто = адрес из client/community_defaults.py
+    signing_public_key: str = ""        # пусто = ключ из client/community_defaults.py
+    models_url: str = ""                # пусто = MODELS_URL из client/community_defaults.py; "server" = через сервер приёма
+    auto_send: bool = False             # False: обновление ждёт, пока пользователь посмотрит и нажмёт «Отправить»
+    credit_public: bool = True          # логин GitHub в таблице участников
+    yt_dlp: str = ""                    # пусто = yt-dlp из PATH или python -m yt_dlp
+    ffmpeg: str = ""                    # пусто = ffmpeg из PATH
+    keep_work: bool = False             # True: не удалять отрезки и признаки после обучения (отладка)
+
+
+@dataclass
 class ClientConfig:
     server: ServerCfg = field(default_factory=ServerCfg)
     schedule: ScheduleCfg = field(default_factory=ScheduleCfg)
     training: TrainingCfg = field(default_factory=TrainingCfg)
     guard: GuardCfg = field(default_factory=GuardCfg)
+    community: CommunityCfg = field(default_factory=CommunityCfg)
     home: Path = field(default_factory=home_dir)
 
     def __post_init__(self):

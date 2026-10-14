@@ -257,6 +257,16 @@ R11_CASES = [
     ("Darwin", {P.APP_JOB_ENV: "lips-service"}, ["evaluate.py"], False),
     ("Darwin", {P.APP_JOB_ENV: "lips-service"}, ["../tools/mem_guard.py", "--", "python", "train.py"], False),
     ("Darwin", {P.APP_JOB_ENV: "lips-service"}, [], False),
+    # «Помочь обучить»: the worker's prepare step and train.py only
+    ("Darwin", {P.APP_JOB_ENV: "help-train"}, ["/x/lipread/train_on_me_worker.py", "prepare", "--job", "j"], True),
+    ("Darwin", {P.APP_JOB_ENV: "help-train"}, ["train.py", "--run", "help"], True),
+    ("Darwin", {P.APP_JOB_ENV: "help-train"}, ["../tools/mem_guard.py", "--", "python", "train.py"], True),
+    ("Darwin", {P.APP_JOB_ENV: "help-train"}, ["train_on_me_worker.py", "evaluate"], False),
+    ("Darwin", {P.APP_JOB_ENV: "help-train"}, ["train_on_me_worker.py"], False),
+    ("Darwin", {P.APP_JOB_ENV: "help-train"}, ["train_e2e.py"], False),
+    ("Darwin", {P.APP_JOB_ENV: "help-train"}, ["evaluate.py"], False),
+    ("Darwin", {P.APP_JOB_ENV: "help-train"}, ["lips_service.py"], False),
+    ("Darwin", {P.APP_JOB_ENV: "help-train"}, [], False),
 ]
 
 

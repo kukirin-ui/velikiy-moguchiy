@@ -1,0 +1,1035 @@
+{
+ "spec": {
+  "spec_id": "multivsr-ru-lora-r16-qv",
+  "spec_hash": "24c0e092e6d78c8396128168ebfec270ffc20dad0b295d22bb249f9c23423a38",
+  "max_payload_bytes": 3604480,
+  "tensors": [
+   {
+    "name": "encoder.layers.0.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.0.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.0.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.0.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.1.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.1.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.1.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.1.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.2.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.2.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.2.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.2.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.3.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.3.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.3.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.3.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.4.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.4.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.4.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.4.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.5.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.5.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.5.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.5.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.6.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.6.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.6.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.6.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.7.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.7.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.7.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.7.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.8.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.8.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.8.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.8.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.9.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.9.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.9.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.9.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.10.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.10.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.10.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.10.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.11.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.11.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "encoder.layers.11.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "encoder.layers.11.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.0.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.0.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.0.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.0.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.0.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.0.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.0.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.0.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.1.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.1.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.1.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.1.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.1.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.1.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.1.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.1.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.2.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.2.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.2.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.2.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.2.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.2.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.2.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.2.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.3.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.3.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.3.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.3.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.3.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.3.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.3.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.3.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.4.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.4.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.4.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.4.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.4.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.4.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.4.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.4.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.5.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.5.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.5.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.5.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.5.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.5.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.5.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.5.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.6.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.6.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.6.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.6.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.6.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.6.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.6.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.6.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.7.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.7.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.7.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.7.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.7.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.7.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.7.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.7.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.8.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.8.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.8.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.8.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.8.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.8.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.8.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.8.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.9.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.9.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.9.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.9.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.9.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.9.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.9.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.9.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.10.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.10.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.10.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.10.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.10.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.10.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.10.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.10.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.11.self_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.11.self_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.11.self_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.11.self_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.11.src_attn.linears.0.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.11.src_attn.linears.0.B",
+    "shape": [
+     768,
+     16
+    ]
+   },
+   {
+    "name": "decoder.layers.11.src_attn.linears.2.A",
+    "shape": [
+     16,
+     768
+    ]
+   },
+   {
+    "name": "decoder.layers.11.src_attn.linears.2.B",
+    "shape": [
+     768,
+     16
+    ]
+   }
+  ]
+ },
+ "training": {
+  "steps": 200,
+  "lr": 0.0001,
+  "batch": 4,
+  "accum": 4,
+  "warmup": 20,
+  "max_seconds": 8.0,
+  "dev_fraction": 0.1,
+  "min_clips": 20
+ },
+ "assets": {
+  "venc": {
+   "url": "https://github.com/zigansh1n/velikiy-moguchiy-models/releases/download/lips-0.1/velikiy-moguchiy-lips-0.1-venc.pth",
+   "sha256": "5d3d2808d7f2ca462c9ae8851d8b2114f3dc6937887f57c0ceeddf19d91f16cf",
+   "bytes": 51884747
+  }
+ },
+ "exclusions_url": "https://raw.githubusercontent.com/zigansh1n/velikiy-moguchiy/main/data-governance/exclusions/channels.tsv"
+}

@@ -1,0 +1,142 @@
+name: Federated intake deploy
+
+# Deploys the intake server of «Помочь обучить» (federated/worker) to the project's Cloudflare account with wrangler
+# (pinned in federated/worker/package-lock.json): registers the account's workers.dev subdomain velikiy-moguchiy when it
+# has none and stops if it has another, creates the KV namespace for rate limits when missing, sets the Worker's
+# secrets and variables, and writes the Worker's address into federated/client/community_defaults.py (pushed with
+# the BOT_PUSH_KEY deploy key, docs/AUTOMATION.md). The model-signing key never reaches this job: the app's public
+# key is a committed file. One-time setup: docs/AUTOMATION.md. Without the secrets and variables below the job only
+# notes what is missing and stays green.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "federated/worker/**"
+      - ".github/workflows/federated-worker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: federated-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy the intake Worker
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      HF_INTAKE_TOKEN: ${{ secrets.HF_INTAKE_TOKEN }}
+      FL_TASK_SECRET: ${{ secrets.FL_TASK_SECRET }}
+      FL_INBOX: ${{ vars.FL_INBOX }}
+      FL_MODELS: ${{ vars.FL_MODELS }}
+      FL_GITHUB_CLIENT_ID: ${{ vars.FL_GITHUB_CLIENT_ID }}
+      FL_MAX_UPDATES_PER_DAY: ${{ vars.FL_MAX_UPDATES_PER_DAY }}
+      FL_MAX_TASKS_PER_DAY: ${{ vars.FL_MAX_TASKS_PER_DAY }}
+      FL_MIN_ACCOUNT_AGE_DAYS: ${{ vars.FL_MIN_ACCOUNT_AGE_DAYS }}
+      FL_BANNED_LOGINS: ${{ vars.FL_BANNED_LOGINS }}
+      SUBDOMAIN: velikiy-moguchiy
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Check configuration
+        id: cfg
+        run: |
+          missing=""
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID HF_INTAKE_TOKEN FL_TASK_SECRET FL_INBOX FL_MODELS; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "### Intake deploy skipped: not configured ($missing). See docs/AUTOMATION.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          ssh-key: ${{ secrets.BOT_PUSH_KEY }}
+
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          node-version: "22"
+
+      - name: Install pinned wrangler and test
+        if: steps.cfg.outputs.ready == 'true'
+        working-directory: federated/worker
+        run: |
+          npm ci --no-audit --no-fund
+          node --test
+
+      - name: workers.dev subdomain of the account
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json")
+          sub() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write((JSON.parse(s).result||{}).subdomain||"")}catch{}})'; }
+          current=$(curl -sS "${auth[@]}" "$api" | sub)
+          if [ -z "$current" ]; then
+            curl -sS -X PUT "${auth[@]}" "$api" --data "{\"subdomain\":\"$SUBDOMAIN\"}" > /dev/null
+            current=$(curl -sS "${auth[@]}" "$api" | sub)
+          fi
+          if [ "$current" != "$SUBDOMAIN" ]; then
+            echo "The account's workers.dev subdomain is '${current:-none}', expected '$SUBDOMAIN': is this the project's Cloudflare account?"
+            exit 1
+          fi
+
+      - name: KV namespace for rate limits
+        if: steps.cfg.outputs.ready == 'true'
+        working-directory: federated/worker
+        run: |
+          find_id() {
+            npx wrangler kv namespace list | node -e '
+              let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
+                const t = "velikiy-moguchiy-train-limits";
+                const ns = JSON.parse(s.slice(s.indexOf("["))).find((n) => n.title === t || n.title.endsWith("-" + t));
+                process.stdout.write(ns ? ns.id : "");
+              });'
+          }
+          id=$(find_id)
+          if [ -z "$id" ]; then
+            npx wrangler kv namespace create velikiy-moguchiy-train-limits > /dev/null
+            id=$(find_id)
+          fi
+          [ -n "$id" ] || { echo "KV namespace was not created"; exit 1; }
+          sed -i "s/KV_NAMESPACE_ID/$id/" wrangler.toml
+
+      - name: Deploy
+        id: deploy
+        if: steps.cfg.outputs.ready == 'true'
+        working-directory: federated/worker
+        run: |
+          args=()
+          for v in FL_INBOX FL_MODELS FL_GITHUB_CLIENT_ID FL_MAX_UPDATES_PER_DAY FL_MAX_TASKS_PER_DAY FL_MIN_ACCOUNT_AGE_DAYS FL_BANNED_LOGINS; do
+            [ -n "${!v}" ] && args+=(--var "$v:${!v}")
+          done
+          npx wrangler deploy "${args[@]}" | tee "$RUNNER_TEMP/deploy.log"
+          printf %s "$HF_INTAKE_TOKEN" | npx wrangler secret put HF_TOKEN
+          printf %s "$FL_TASK_SECRET" | npx wrangler secret put FL_TASK_SECRET
+          url=$(grep -oE "https://[a-z0-9-]+\.$SUBDOMAIN\.workers\.dev" "$RUNNER_TEMP/deploy.log" | head -1)
+          [ -n "$url" ] || { echo "no $SUBDOMAIN.workers.dev address in the deploy output"; exit 1; }
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Intake: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the intake address for the app
+        if: steps.cfg.outputs.ready == 'true'
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          cd federated && python3 -c "import os; from space.deploy import write_defaults; write_defaults(os.environ['URL'], None)"
+          cd ..
+          if git diff --quiet -- federated/client/community_defaults.py; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Federated: intake address for the app" -- federated/client/community_defaults.py
+          git push

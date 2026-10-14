@@ -1,0 +1,10 @@
+# Intake Worker of «Помочь обучить» (src/index.js). Deployed by .github/workflows/federated-worker.yml, which fills
+# in the KV namespace id and passes the variables below; secrets HF_TOKEN and FL_TASK_SECRET are set there too.
+name = "velikiy-moguchiy-train"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "LIMITS"
+id = "KV_NAMESPACE_ID"

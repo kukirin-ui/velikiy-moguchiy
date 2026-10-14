@@ -39,6 +39,8 @@ def r11_allowed(system, env, argv):
     script = _os.path.basename(argv[0]) if argv else ""
     if env.get("VELIKIY_MOGUCHIY_APP_JOB") == "lips-service":
         return script == "lips_service.py"
+    if env.get("VELIKIY_MOGUCHIY_APP_JOB") == "help-train":  # «Помочь обучить» (R11): train.py and the worker's prepare
+        return script in ("train.py", "mem_guard.py") or (script == "train_on_me_worker.py" and argv[1:2] == ["prepare"])
     return env.get("VELIKIY_MOGUCHIY_APP_JOB") == "train-on-me" and script in (
         "train_on_me_worker.py", "train.py", "train_e2e.py", "mem_guard.py")
 

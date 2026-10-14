@@ -1,0 +1,11 @@
+{
+  "name": "velikiy-moguchiy-train",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "4.141.0"
+  }
+}

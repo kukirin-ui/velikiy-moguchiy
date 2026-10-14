@@ -145,6 +145,8 @@ targets:
       - path: VelikiyMoguchiy/ProblemReport/SPProblemReport.m
       - path: VelikiyMoguchiy/ProblemReport/SPProblemReportTests.m
       - path: VelikiyMoguchiy/Support/SPAppPathsTests.m
+      - path: VelikiyMoguchiy/CommunityTraining/SPCommunityTrainingPolicy.m
+      - path: VelikiyMoguchiy/CommunityTraining/SPCommunityTrainingPolicyTests.m
       - path: VelikiyMoguchiy/Clipboard/SPClipboardManager.m
       - path: VelikiyMoguchiy/Clipboard/SPClipboardRestorePolicy.m
       - path: VelikiyMoguchiy/Clipboard/SPClipboardRestorePolicyTests.m

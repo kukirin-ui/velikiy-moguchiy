@@ -17,12 +17,17 @@ HTTP_STATUS = {
     "banned": 403,
     "not_found": 404,
     "length_required": 411,
+    "unauthorized": 401,
+    "forbidden": 403,
+    "bad_task": 422,
+    "unavailable": 503,
     "server_error": 500,
 }
 
 # Эти ошибки повторять бессмысленно: результат не изменится от повтора.
 PERMANENT = {"bad_schema", "bad_signature", "bad_payload", "spec_mismatch", "too_large", "nonfinite",
-             "norm_too_large", "conflict", "banned", "length_required"}
+             "norm_too_large", "conflict", "banned", "length_required", "unauthorized", "forbidden",
+             "bad_task"}
 
 
 class ProtocolError(Exception):
