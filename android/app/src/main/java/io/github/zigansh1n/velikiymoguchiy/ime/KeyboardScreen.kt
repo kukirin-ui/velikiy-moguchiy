@@ -27,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -39,12 +40,16 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -213,20 +218,13 @@ private fun SuggestionRow(model: KeyboardModel, actions: KeyboardActions, colors
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun KeySurface(model: KeyboardModel, actions: KeyboardActions, colors: KeyboardColors, dimmed: Boolean) {
     val density = LocalDensity.current
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     val digitPad = model.profile.kind.isDigitPad
-    val rowHeight: Dp = when {
-        landscape -> 36.dp
-        digitPad -> 50.dp
-        else -> 46.dp
-    }
-    val rowGap: Dp = if (digitPad) 6.dp else if (landscape) 7.dp else 11.dp
-    val metrics = with(density) {
-        KeyboardGeometry.Metrics(rowHeight.toPx(), rowGap.toPx(), topPadding = 6.dp.toPx(), bottomPadding = 4.dp.toPx())
-    }
+    val metrics = keySurfaceMetrics(density, landscape, digitPad)
     val rows = model.rows
     val height = with(density) { KeyboardGeometry.height(rows.size, metrics).toDp() }
     val textMeasurer = rememberTextMeasurer(cacheSize = 64)
@@ -236,7 +234,10 @@ private fun KeySurface(model: KeyboardModel, actions: KeyboardActions, colors: K
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
-            .height(height),
+            .height(height)
+            // The keys are drawn, not views: the emulator tests find the surface by this tag.
+            .semantics { testTagsAsResourceId = true }
+            .testTag(KEY_SURFACE_TAG),
     ) {
         val width = constraints.maxWidth.toFloat()
         val frames = remember(rows, width, metrics) { KeyboardGeometry.layout(rows, width, metrics) }
@@ -341,6 +342,21 @@ private fun KeySurface(model: KeyboardModel, actions: KeyboardActions, colors: K
                 }
             }
         }
+    }
+}
+
+internal const val KEY_SURFACE_TAG = "keyboard_keys"
+
+/** Row sizes of the key surface in pixels. */
+internal fun keySurfaceMetrics(density: Density, landscape: Boolean, digitPad: Boolean): KeyboardGeometry.Metrics {
+    val rowHeight: Dp = when {
+        landscape -> 36.dp
+        digitPad -> 50.dp
+        else -> 46.dp
+    }
+    val rowGap: Dp = if (digitPad) 6.dp else if (landscape) 7.dp else 11.dp
+    return with(density) {
+        KeyboardGeometry.Metrics(rowHeight.toPx(), rowGap.toPx(), topPadding = 6.dp.toPx(), bottomPadding = 4.dp.toPx())
     }
 }
 
