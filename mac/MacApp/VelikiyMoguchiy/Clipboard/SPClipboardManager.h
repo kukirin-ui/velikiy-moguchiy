@@ -16,6 +16,11 @@ extern NSString *const SPClipboardSnapshotChildFlag;
 /// be read quickly (promised data from a slow or remote provider).
 - (void)backup;
 
+/// The last backup attempt found something on the clipboard it could not keep
+/// (too large, too slow, or only flavors it does not save): a restore will not
+/// bring it back. Concealed items (passwords) are dropped on purpose and do not count.
+@property (nonatomic, readonly) BOOL lastBackupLostContent;
+
 /// Write text to the system clipboard. For text the user is meant to keep
 /// (copy results, the answer to a question): clipboard managers record it.
 - (void)writeText:(NSString *)text;

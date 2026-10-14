@@ -131,6 +131,8 @@ targets:
       - path: VelikiyMoguchiy/Support/SPHotkeyNamesTests.m
       - path: VelikiyMoguchiy/Hotkey/SPTriggerKeyPolicy.m
       - path: VelikiyMoguchiy/Hotkey/SPTriggerKeyPolicyTests.m
+      - path: VelikiyMoguchiy/Accessibility/SPAccessibilityManager.m
+      - path: VelikiyMoguchiy/Accessibility/SPAccessibilityManagerTests.m
       - path: VelikiyMoguchiy/Hotkey/SPHotkeyMonitor.m
       - path: VelikiyMoguchiy/History/SPHistoryManager.m
       - path: VelikiyMoguchiy/History/SPHistoryManagerTests.m
@@ -172,4 +174,5 @@ targets:
       - XCTest
       - Foundation
       - AVFoundation
+      - ApplicationServices
       - sdk: libsqlite3.tbd

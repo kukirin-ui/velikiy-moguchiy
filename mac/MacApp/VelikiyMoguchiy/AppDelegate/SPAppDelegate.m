@@ -1,5 +1,6 @@
 #import "SPAppDelegate.h"
 #import "SPPermissionManager.h"
+#import "SPAccessibilityManager.h"
 #import "SPHotkeyMonitor.h"
 #import "SPMediaKeyMonitor.h"
 #import "SPAudioCaptureManager.h"
@@ -121,6 +122,8 @@
 @property (nonatomic, assign) BOOL hotkeyRestartPending;
 // Ends a recording that has gone on for recording.max_duration_s.
 @property (nonatomic, strong) NSTimer *recordingCapTimer;
+// Judges the focused element before a paste (password field, no field at all).
+@property (nonatomic, strong) SPAccessibilityManager *accessibilityManager;
 @property (nonatomic, assign) SPSessionPurpose pendingSessionPurpose;
 @property (nonatomic, assign) SPSessionPurpose sessionPurpose;
 // Session result metadata delivered just before the final text; consumed
@@ -507,6 +510,7 @@ static BOOL SPLabFlag(const char *name) {
     self.clipboardRestorePolicy = [[SPClipboardRestorePolicy alloc] init];
     self.clipboardRestorePolicy.clipboardManager = self.clipboardManager;
     self.pasteManager = [[SPPasteManager alloc] init];
+    self.accessibilityManager = [[SPAccessibilityManager alloc] init];
     self.instantPasteGuard = [[SPInstantPasteGuard alloc] init];
     self.audioCaptureManager = [[SPAudioCaptureManager alloc] init];
     self.audioDeviceManager = [[SPAudioDeviceManager alloc] init];
@@ -1636,11 +1640,9 @@ static BOOL SPLabFlag(const char *name) {
         NSLog(@"[VelikiyMoguchiy] Typed draft cannot be completed safely; text copied to clipboard only");
         [self.clipboardManager cancelPendingRestore];
         [self.clipboardManager writeText:text];
-        [self.overlayPanel updateDisplayText:text];
-        [self.overlayPanel updateState:@"pasting"];
-        [self.overlayPanel showResultBadge:@"Не вставилось целиком — в буфере, ⌘V"];
         [self.statusBarManager updateState:@"idle"];
-        [self showPromptTemplateButtonsIfNeededOrDismissWithLingerDuration:kManualPasteResultLingerDuration];
+        [self.overlayPanel showMessage:@"Не вставилось целиком — текст в буфере, ⌘V"
+                                  icon:SPOverlayMessageIconClipboard];
         [self applyDeferredConfigReloadIfNeeded];
         return;
     }
@@ -1686,6 +1688,25 @@ static BOOL SPLabFlag(const char *name) {
     BOOL keepLastDictation = keepLastDictationEnabled();
     NSLog(@"[VelikiyMoguchiy] Accessibility granted: %@", accessOK ? @"YES" : @"NO");
 
+    SPPasteTarget target = canAutoPaste ? [self.accessibilityManager pasteTargetForFocusedElement] : SPPasteTargetPaste;
+    if (target == SPPasteTargetSecure) {
+        // Dictated text never goes into a password field, nor onto the clipboard for one.
+        NSLog(@"[VelikiyMoguchiy] Focus is a password field; the text is not pasted");
+        [self.statusBarManager updateState:@"idle"];
+        [self.overlayPanel showMessage:@"Поле пароля — текст не вставлен" icon:SPOverlayMessageIconNotice];
+        [self applyDeferredConfigReloadIfNeeded];
+        return;
+    }
+    if (target == SPPasteTargetNone) {
+        NSLog(@"[VelikiyMoguchiy] Nothing that takes text has focus; the text goes to the clipboard");
+        [self.clipboardManager cancelPendingRestore];
+        [self.clipboardManager writeText:text];
+        [self.statusBarManager updateState:@"idle"];
+        [self.overlayPanel showMessage:@"Некуда вставить — текст в буфере, ⌘V" icon:SPOverlayMessageIconClipboard];
+        [self applyDeferredConfigReloadIfNeeded];
+        return;
+    }
+
     if (canAutoPaste) {
         // Show corrected text in overlay before pasting
         [self.overlayPanel updateDisplayText:text];
@@ -1724,13 +1745,15 @@ static BOOL SPLabFlag(const char *name) {
                 }
                 if (!keepLastDictation) {
                     [self.clipboardRestorePolicy scheduleRestoreForCurrentSession];
+                    [self noteClipboardThatCannotComeBack];
                 }
             } else {
                 // Nothing was injected. Leave the text on the clipboard so
                 // the user can paste manually; restoring the backup over it
                 // would throw the transcript away.
                 [self.clipboardManager cancelPendingRestore];
-                [self.overlayPanel showResultBadge:@"Не вставилось — в буфере, ⌘V"];
+                [self.overlayPanel showMessage:@"Не вставилось — текст в буфере, ⌘V"
+                                          icon:SPOverlayMessageIconClipboard];
             }
             [self.statusBarManager updateState:@"idle"];
             [self showPromptTemplateButtonsIfNeededOrDismiss];
@@ -1743,21 +1766,18 @@ static BOOL SPLabFlag(const char *name) {
             [self.clipboardManager writeText:text];
         }
 
-        NSString *badge = nil;
-        NSTimeInterval lingerDuration = kManualPasteResultLingerDuration;
+        [self.statusBarManager updateState:@"idle"];
         if (!shouldAutoPaste) {
+            // Copy-only is the user's choice: the clipboard icon says enough.
             NSLog(@"[VelikiyMoguchiy] Auto-paste disabled — processed text copied to clipboard only");
-            badge = @"✓ Скопировано";
+            [self.overlayPanel updateState:@"pasting"];
+            [self.overlayPanel showResultBadge:@"✓ Скопировано"];
+            [self showPromptTemplateButtonsIfNeededOrDismissWithLingerDuration:kManualPasteResultLingerDuration];
         } else {
             NSLog(@"[VelikiyMoguchiy] Accessibility not granted — text copied to clipboard only");
-            badge = @"Не вставилось — в буфере, ⌘V";
+            [self.overlayPanel showMessage:@"Нет универсального доступа — текст в буфере, ⌘V"
+                                      icon:SPOverlayMessageIconClipboard];
         }
-
-        [self.overlayPanel updateDisplayText:text];
-        [self.overlayPanel updateState:@"pasting"];
-        [self.overlayPanel showResultBadge:badge];
-        [self.statusBarManager updateState:@"idle"];
-        [self showPromptTemplateButtonsIfNeededOrDismissWithLingerDuration:lingerDuration];
     }
 
     [self applyDeferredConfigReloadIfNeeded];
@@ -1930,6 +1950,7 @@ static BOOL SPLabFlag(const char *name) {
     // raw paste on top would duplicate it. Decided when the session began.
     if (self.rustBridge.currentSessionTypesText) return;
     if (![self.permissionManager isAccessibilityGranted]) return;
+    if ([self.accessibilityManager pasteTargetForFocusedElement] != SPPasteTargetPaste) return;
 
     NSLog(@"[VelikiyMoguchiy] InstantPaste: pasting raw ASR text (%lu chars)", (unsigned long)text.length);
     self.instantPastedText = text;
@@ -2543,9 +2564,8 @@ static BOOL SPLabFlag(const char *name) {
     [self.overlayPanel updateState:@"pasting"];
 
     if (text.length == 0) {
-        [self.overlayPanel showResultBadge:@"Правка пустая — текст не тронут"];
         [self.statusBarManager updateState:@"idle"];
-        [self.overlayPanel lingerAndDismissWithDuration:kManualPasteResultLingerDuration];
+        [self.overlayPanel showMessage:@"Правка пустая — текст не тронут" icon:SPOverlayMessageIconNotice];
         return;
     }
 
@@ -2604,9 +2624,9 @@ static BOOL SPLabFlag(const char *name) {
             } else {
                 [self.clipboardManager cancelPendingRestore];
                 [self.clipboardManager writeText:text];
-                [self.overlayPanel showResultBadge:@"📋 Правка в буфере, ⌘V"];
                 [self.statusBarManager updateState:@"idle"];
-                [self showPromptTemplateButtonsIfNeededOrDismissWithLingerDuration:kManualPasteResultLingerDuration];
+                [self.overlayPanel showMessage:@"Не заменилось — правка в буфере, ⌘V"
+                                          icon:SPOverlayMessageIconClipboard];
             }
         }];
         return;
@@ -2614,9 +2634,20 @@ static BOOL SPLabFlag(const char *name) {
 
     [self.clipboardManager cancelPendingRestore];
     [self.clipboardManager writeText:text];
-    [self.overlayPanel showResultBadge:@"📋 Правка в буфере, ⌘V"];
     [self.statusBarManager updateState:@"idle"];
-    [self showPromptTemplateButtonsIfNeededOrDismissWithLingerDuration:kManualPasteResultLingerDuration];
+    [self.overlayPanel showMessage:@"Выделение изменилось — правка в буфере, ⌘V"
+                              icon:SPOverlayMessageIconClipboard];
+}
+
+/// The paste replaced a clipboard that the backup could not keep: once the
+/// pill has shown the result, it says the old content will not come back.
+- (void)noteClipboardThatCannotComeBack {
+    if (!self.clipboardManager.lastBackupLostContent) return;
+    self.pendingPillMessage =
+        [SPErrorExplainer explanationWithKind:SPErrorKindUnknown
+                                    shortText:@"Скопированное раньше не вернётся в буфер: его не удалось сохранить"
+                                       detail:@""
+                                       action:SPErrorActionNone];
 }
 
 /// Takes back the text the app inserted last, when it is still there: within two
@@ -2714,6 +2745,11 @@ static BOOL SPLabFlag(const char *name) {
 /// Pastes `text` at the cursor outside a dictation session, through the
 /// normal paste path with its clipboard backup / restore rules.
 - (void)pasteTextAtCursor:(NSString *)text {
+    if ([self.permissionManager isAccessibilityGranted] &&
+        [self.accessibilityManager pasteTargetForFocusedElement] == SPPasteTargetSecure) {
+        [self showInfoMessage:@"Поле пароля — текст не вставлен"];
+        return;
+    }
     BOOL keepLast = keepLastDictationEnabled();
     [self.clipboardManager cancelPendingRestore];
     if (![self.permissionManager isAccessibilityGranted] || ![self shouldAutoPasteProcessedText]) {

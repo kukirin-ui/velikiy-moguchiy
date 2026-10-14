@@ -2888,7 +2888,7 @@ static NSString *SPCondensedProviderError(NSString *raw) {
                                       control:self.autoReturnSwitch],
                        [self cardRowWithLabel:@"Голосовые команды"
                                       control:self.voiceCommandsSwitch],
-                       [self cardRowWithLabel:@"Оставлять последнюю диктовку в буфере обмена"
+                       [self cardRowWithLabel:@"Оставлять диктовку в буфере обмена (скопированное раньше не вернётся)"
                                       control:self.keepLastDictationSwitch],
                        [self cardRowWithLabel:@"Вставлять сырой текст сразу, потом исправлять"
                                       control:self.pasteAsrFirstSwitch],

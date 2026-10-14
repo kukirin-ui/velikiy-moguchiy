@@ -214,6 +214,7 @@ static const int kChildExitUnusable = 2;
     // clipboard while it still holds the app's own transcription, so the later
     // restore would put that text back instead of the user's original content.
     if (self.hasBackup) return;
+    _lastBackupLostContent = NO;
 
     NSPasteboard *pb = [NSPasteboard generalPasteboard];
     NSInteger changeCountBefore = pb.changeCount;
@@ -221,6 +222,7 @@ static const int kChildExitUnusable = 2;
     NSDictionary *snapshot = [self snapshotGeneralPasteboardInChild];
     if (!snapshot) {
         NSLog(@"[VelikiyMoguchiy] Clipboard not backed up (unreadable, too large or too slow); it will not be restored");
+        _lastBackupLostContent = YES;
         return;
     }
     if ([snapshot[@"concealed"] boolValue]) {
@@ -231,6 +233,7 @@ static const int kChildExitUnusable = 2;
     }
     if ([snapshot[@"lossy"] boolValue]) {
         NSLog(@"[VelikiyMoguchiy] Clipboard holds only unsupported flavors; not backed up");
+        _lastBackupLostContent = YES;
         return;
     }
     if ([snapshot[@"mark"] integerValue] != changeCountBefore || pb.changeCount != changeCountBefore) {
