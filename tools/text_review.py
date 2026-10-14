@@ -11,7 +11,8 @@ in tools/text_review/prompt.md; known false positives are dropped by tools/text_
 
 The model is configured by TEXT_REVIEW_ENDPOINT (chat completions URL), TEXT_REVIEW_MODEL and TEXT_REVIEW_TOKEN;
 the free tier of Cloudflare Workers AI is enough (docs/AUTOMATION.md). Without any of them the review says so and
-exits 0.
+exits 0. TEXT_REVIEW_MAX_TOKENS (default 4096) is the answer limit sent with every request: a reasoning model spends
+tokens on thinking first, and the endpoint's own default cuts the JSON off.
 When the API is unreachable, refuses or is rate limited, the review warns and exits 0: the hard rules live in
 privacy_guard.py, this check must never block the project for good.
 With --comment (GITHUB_TOKEN, GITHUB_REPOSITORY, PR_NUMBER) the result goes to one PR comment updated in place.
@@ -42,6 +43,7 @@ MODEL = os.environ.get("TEXT_REVIEW_MODEL", "")
 CHUNK_CHARS = 12000
 MAX_CHUNKS = int(os.environ.get("TEXT_REVIEW_MAX_CHUNKS") or 10)
 VERBOSE = bool(os.environ.get("TEXT_REVIEW_VERBOSE"))
+MAX_TOKENS = int(os.environ.get("TEXT_REVIEW_MAX_TOKENS") or 4096)
 PAUSE = 7  # seconds between requests, to stay under free-tier rate limits
 MAX_FINDINGS = 40
 MARKER = "<!-- text-review -->"
@@ -180,12 +182,44 @@ def system_prompt(rules) -> str:
     return text.replace("{{ALLOWLIST}}", known or "- нет")
 
 
+def reply_text(raw: bytes):
+    """(text, finish reason) of a chat completion. Reasoning models return the answer in `content` next to
+    `reasoning`/`reasoning_content`; `content` may be null, a list of parts, or absent when the reasoning used up
+    the token limit. Cloudflare's own shape (`result.response`) is accepted too."""
+    data = json.loads(raw)
+    if isinstance(data.get("result"), dict) and "choices" not in data:
+        data = data["result"]
+    if "choices" in data:
+        choice = data["choices"][0]
+        content = (choice.get("message") or {}).get("content")
+        finish = choice.get("finish_reason")
+    else:
+        content, finish = data["response"], None
+    if isinstance(content, list):
+        content = "".join(str(p.get("text", "")) for p in content if isinstance(p, dict))
+    return content or "", finish
+
+
 def ask(system: str, user: str, token: str) -> str:
-    body = json.dumps({
-        "model": MODEL,
-        "temperature": 0,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-    }).encode()
+    """The model's answer. A reasoning model spends tokens on its thinking first and the endpoint's default limit
+    is small, so the answer comes back cut off (finish reason `length`); that is retried once with twice the limit."""
+    for limit in (MAX_TOKENS, MAX_TOKENS * 2):
+        body = json.dumps({
+            "model": MODEL,
+            "temperature": 0,
+            "max_tokens": limit,
+            "reasoning_effort": "low",
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        }).encode()
+        text, finish = post(body, token)
+        if finish != "length":
+            return text
+        if VERBOSE:
+            print(f"text review: cut off at {limit} tokens")
+    raise Unavailable(f"the answer was cut off at {limit} tokens (TEXT_REVIEW_MAX_TOKENS)")
+
+
+def post(body: bytes, token: str):
     req = urllib.request.Request(ENDPOINT, data=body, method="POST", headers={
         "Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/json"})
     for attempt in (1, 2):
@@ -201,13 +235,12 @@ def ask(system: str, user: str, token: str) -> str:
         except (urllib.error.URLError, TimeoutError, OSError) as e:
             raise Unavailable(type(e).__name__) from e
         try:
-            message = json.loads(raw)["choices"][0]["message"]
-            if VERBOSE:
-                print(f"text review: reply of {len(raw)} bytes, message keys {sorted(message)}, "
-                      f"content {len(message.get('content') or '')} chars")
-            return message["content"] or ""
-        except (ValueError, KeyError, IndexError, TypeError) as e:
+            text, finish = reply_text(raw)
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError) as e:
             raise Unavailable(f"the API answered without a chat completion: {raw[:40]!r}") from e
+        if VERBOSE:
+            print(f"text review: {len(raw)} bytes, finish reason {finish!r}, answer {len(text)} chars")
+        return text, finish
     raise Unavailable("rate limited")
 
 

@@ -222,3 +222,56 @@ def test_file_mode_reviews_every_line_and_fails_from_the_chosen_severity(tmp_pat
     monkeypatch.setattr(t, "ask", lambda s, u, tok: finding_reply(file=str(notes), line=3, severity="low"))
     assert t.main(["--file", str(notes), "--fail-on", "medium"]) == 0
     capsys.readouterr()
+
+
+FIXTURES = Path(__file__).resolve().parent / "text_review" / "fixtures"
+
+
+def fixture(name):
+    return (FIXTURES / f"{name}.json").read_bytes()
+
+
+def test_recorded_reply_cut_off_by_the_default_token_limit():
+    """Workers AI, gpt-oss-120b, no max_tokens: the reasoning used up 256 tokens and the answer stopped mid-JSON."""
+    text, finish = t.reply_text(fixture("cut_off"))
+    assert finish == "length" and text.startswith('{"findings"') and not text.rstrip().endswith("}")
+
+
+def test_recorded_reply_with_a_stray_bracket_gives_the_finding():
+    text, finish = t.reply_text(fixture("answered"))
+    assert finish == "stop" and text.endswith("]]}")
+    chunk = [t.Section("docs/AUTOMATION.md", [(361, True, ""), (362, True, "x")])]
+    found = t.parse_findings(text, chunk)
+    assert [(f.path, f.line, f.severity, f.category) for f in found] == [("docs/AUTOMATION.md", 362, "high", "placeholder")]
+
+
+def test_reply_shapes():
+    parts = {"choices": [{"message": {"content": [{"type": "text", "text": '{"findings"'}, {"type": "text", "text": ": []}"}]},
+                          "finish_reason": "stop"}]}
+    assert t.reply_text(json.dumps(parts).encode()) == ('{"findings": []}', "stop")
+    nothing = {"choices": [{"message": {"content": None, "reasoning_content": "thinking"}, "finish_reason": "length"}]}
+    assert t.reply_text(json.dumps(nothing).encode()) == ("", "length")
+    native = {"result": {"response": '{"findings": []}'}, "success": True}
+    assert t.reply_text(json.dumps(native).encode()) == ('{"findings": []}', None)
+
+
+def test_a_cut_off_answer_is_retried_with_twice_the_limit(monkeypatch):
+    limits = []
+
+    def fake_post(body, token):
+        limits.append(json.loads(body)["max_tokens"])
+        return ('{"findings": []}', "stop") if len(limits) == 2 else ('{"findings": [', "length")
+    monkeypatch.setattr(t, "post", fake_post)
+    monkeypatch.setattr(t, "MAX_TOKENS", 1000)
+    assert t.ask("s", "u", "token") == '{"findings": []}'
+    assert limits == [1000, 2000]
+
+
+def test_an_answer_that_stays_cut_off_is_unavailable_and_says_why(monkeypatch):
+    monkeypatch.setattr(t, "post", lambda body, token: ("{", "length"))
+    try:
+        t.ask("s", "u", "token")
+    except t.Unavailable as e:
+        assert "cut off" in str(e) and "TEXT_REVIEW_MAX_TOKENS" in str(e)
+    else:
+        raise AssertionError("expected Unavailable")
