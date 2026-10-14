@@ -40,6 +40,7 @@ MODEL = os.environ.get("TEXT_REVIEW_MODEL", "")
 # keeps a request near 4000 input tokens plus the prompt; Cyrillic runs about 3 characters per token
 CHUNK_CHARS = 12000
 MAX_CHUNKS = int(os.environ.get("TEXT_REVIEW_MAX_CHUNKS") or 10)
+VERBOSE = bool(os.environ.get("TEXT_REVIEW_VERBOSE"))
 PAUSE = 7  # seconds between requests, to stay under free-tier rate limits
 MAX_FINDINGS = 40
 MARKER = "<!-- text-review -->"
@@ -193,34 +194,52 @@ def ask(system: str, user: str, token: str) -> str:
         except (urllib.error.URLError, TimeoutError, OSError) as e:
             raise Unavailable(type(e).__name__) from e
         try:
-            return json.loads(raw)["choices"][0]["message"]["content"] or ""
+            message = json.loads(raw)["choices"][0]["message"]
+            if VERBOSE:
+                print(f"text review: reply of {len(raw)} bytes, message keys {sorted(message)}, "
+                      f"content {len(message.get('content') or '')} chars")
+            return message["content"] or ""
         except (ValueError, KeyError, IndexError, TypeError) as e:
             raise Unavailable(f"the API answered without a chat completion: {raw[:40]!r}") from e
     raise Unavailable("rate limited")
 
 
-def json_object(reply: str):
-    """The first JSON object in a reply; models often wrap it in a code fence or a sentence."""
-    start = reply.find("{")
-    while start != -1:
+def json_objects(reply: str):
+    """Every JSON object in a reply, outermost first; models wrap them in fences or sentences and sometimes
+    break the outer one (a stray bracket), in which case the objects inside it still come out."""
+    out, pos = [], reply.find("{")
+    while pos != -1:
         try:
-            return json.JSONDecoder().raw_decode(reply[start:])[0]
+            obj, end = json.JSONDecoder().raw_decode(reply[pos:])
         except ValueError:
-            start = reply.find("{", start + 1)
-    raise ValueError("no JSON object")
+            pos = reply.find("{", pos + 1)
+            continue
+        out.append(obj)
+        pos = reply.find("{", pos + end)
+    return out
 
 
 def parse_findings(reply: str, chunk) -> list:
     """Findings the model reported for lines this chunk actually adds; anything else is dropped."""
-    try:
-        items = json_object(reply).get("findings", [])
-    except (ValueError, AttributeError):
+    if VERBOSE:
+        print("text review: reply starts with " + repr(reply[:1500]))
+    objects = [o for o in json_objects(reply) if isinstance(o, dict)]
+    if not objects:
         raise Unavailable("the model did not answer with JSON")
+    items = []
+    for obj in objects:
+        if isinstance(obj.get("findings"), list):
+            items += obj["findings"]
+        elif "severity" in obj and "file" in obj:
+            items.append(obj)
     added = {}
     for sec in chunk:
         added.setdefault(sec.path, set()).update(sec.added)
+    if VERBOSE:
+        print(f"text review: the model reported {len(items)} item(s), "
+              f"added lines {({p: sorted(n) for p, n in added.items()})}")
     out = []
-    for it in items if isinstance(items, list) else []:
+    for it in items:
         if not isinstance(it, dict):
             continue
         path = str(it.get("file", "")).strip()
@@ -230,6 +249,8 @@ def parse_findings(reply: str, chunk) -> list:
             continue
         sev = str(it.get("severity", "")).lower()
         if path not in added or line not in added[path] or sev not in SEVERITIES:
+            if VERBOSE:
+                print(f"text review: dropped {path!r}:{line} severity {sev!r}")
             continue
         out.append(Finding(path, line, sev, clean(it.get("category"), 40), clean(it.get("quote"), 200),
                            clean(it.get("problem"), 400), clean(it.get("fix"), 300)))

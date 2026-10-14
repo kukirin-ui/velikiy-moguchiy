@@ -73,6 +73,16 @@ def test_reply_wrapped_in_a_code_fence():
     assert len(t.parse_findings(reply, chunk)) == 1
 
 
+def test_reply_with_a_stray_bracket_still_yields_its_findings():
+    chunk = t.parse_diff("PRIVACY.md", DIFF)
+    broken = finding_reply()[:-1] + "]}"
+    assert broken.endswith("}]]}")
+    assert len(t.parse_findings(broken, chunk)) == 1
+    two = json.dumps({"findings": [json.loads(finding_reply())["findings"][0]] * 2})[:-1] + "]}"
+    assert len(t.parse_findings(two, chunk)) == 2
+    assert t.parse_findings('{"findings": []}', chunk) == []
+
+
 def test_model_output_is_sanitised():
     chunk = t.parse_diff("PRIVACY.md", DIFF)
     f = t.parse_findings(finding_reply(problem="пинг @someone <script>\nи ещё"), chunk)[0]
