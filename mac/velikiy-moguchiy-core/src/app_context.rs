@@ -47,7 +47,7 @@ const DEV_TOOLS: &[&str] = &[
     "dev.zed.Zed",
 ];
 
-/// AI assistant desktop apps: structured output, like dev tools, but not code.
+/// AI assistant desktop apps: verbatim output, like dev tools, but not code.
 const ASSISTANTS: &[&str] = &["com.openai.chat", "com.anthropic.claudefordesktop"];
 
 const BROWSERS: &[&str] = &[
@@ -92,12 +92,12 @@ fn is_output_mode(mode: &str) -> bool {
 }
 
 /// Built-in output mode of an app, `None` when it follows the global setting.
+/// Built-ins only ever keep the words as said: a prompt to an AI chat or a
+/// terminal command reworded into a list is a different prompt.
 fn default_app_mode(bundle_id: &str) -> Option<&'static str> {
     match app_category(Some(bundle_id)) {
-        AppCategory::Messenger => Some("raw"),
-        AppCategory::Mail => Some("formal"),
-        AppCategory::Dev => Some("structured"),
-        _ if matches_any(bundle_id, ASSISTANTS) => Some("structured"),
+        AppCategory::Messenger | AppCategory::Dev => Some("raw"),
+        _ if matches_any(bundle_id, ASSISTANTS) => Some("raw"),
         _ => None,
     }
 }
@@ -270,11 +270,11 @@ mod tests {
         let mode = |id| resolve_output_mode(Some(id), &none, "light");
         assert_eq!(mode("ru.keepcoder.Telegram"), "raw");
         assert_eq!(mode("com.tinyspeck.slackmacgap"), "raw");
-        assert_eq!(mode("com.apple.mail"), "formal");
-        assert_eq!(mode("com.microsoft.Outlook"), "formal");
-        assert_eq!(mode("com.microsoft.VSCode"), "structured");
-        assert_eq!(mode("com.openai.chat"), "structured");
-        assert_eq!(mode("com.anthropic.claudefordesktop"), "structured");
+        assert_eq!(mode("com.apple.mail"), "light");
+        assert_eq!(mode("com.microsoft.Outlook"), "light");
+        assert_eq!(mode("com.microsoft.VSCode"), "raw");
+        assert_eq!(mode("com.openai.chat"), "raw");
+        assert_eq!(mode("com.anthropic.claudefordesktop"), "raw");
         assert_eq!(mode("com.apple.Notes"), "light");
         assert_eq!(resolve_output_mode(None, &none, "formal"), "formal");
     }
@@ -284,9 +284,10 @@ mod tests {
         let none = HashMap::new();
         assert_eq!(output_mode_override(Some("com.apple.Notes"), &none), None);
         assert_eq!(output_mode_override(None, &none), None);
+        assert_eq!(output_mode_override(Some("com.apple.mail"), &none), None);
         assert_eq!(
-            output_mode_override(Some("com.apple.mail"), &none).as_deref(),
-            Some("formal")
+            output_mode_override(Some("com.anthropic.claudefordesktop"), &none).as_deref(),
+            Some("raw")
         );
         let user = modes(&[("com.apple.Notes", "structured")]);
         assert_eq!(
@@ -307,7 +308,7 @@ mod tests {
         assert_eq!(mode("com.jetbrains.intellij"), "light");
         assert_eq!(mode("com.jetbrains.pycharm.ce"), "formal");
         assert_eq!(mode("com.apple.Notes"), "structured");
-        assert_eq!(mode("com.apple.mail"), "formal");
+        assert_eq!(mode("com.apple.mail"), "raw");
     }
 
     #[test]

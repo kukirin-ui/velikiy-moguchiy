@@ -6,7 +6,7 @@
 //! selection-ask panel.
 
 use crate::app_context::{self, FieldContext};
-use crate::config::QwenAsrConfig;
+use crate::config::{Config, QwenAsrConfig};
 use crate::dictionary::{self, DictEntry, Section};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Mutex;
@@ -158,11 +158,25 @@ pub fn dictation_instructions_for(qwen: &QwenAsrConfig, env: &DictationEnvironme
 pub const EDIT_INSTRUCTION: &str = "Перепиши выделенный текст по инструкции пользователя. \
 Верни только новый текст, без пояснений.";
 
-/// Whether the configured recognizer follows session instructions, which a
-/// voice edit needs: only Qwen Omni does. Any other recognizer would return the
-/// spoken instruction itself, and that must never replace a selection.
-pub fn edit_supported(provider: &str, qwen_model: &str) -> bool {
-    provider == "qwen" && velikiy_moguchiy_asr::QwenAsrProvider::is_omni_model(qwen_model)
+/// The config a translate, ask or edit session runs on: Qwen Omni
+/// (`QwenAsrConfig::assistant_model`) whatever recognizer dictates, so a plain
+/// ASR model or a local one never answers with the bare transcript. `None` for
+/// dictation, and when there is no DashScope key to reach Omni with.
+pub fn assistant_config(cfg: &Config, purpose: SessionPurpose) -> Option<Config> {
+    if purpose == SessionPurpose::Dictate || cfg.asr.qwen.effective_api_keys().is_empty() {
+        return None;
+    }
+    let mut session = cfg.clone();
+    session.asr.provider = "qwen".into();
+    session.asr.qwen.model = cfg.asr.qwen.assistant_model();
+    Some(session)
+}
+
+/// Whether a voice edit can run: it needs a model that follows session
+/// instructions (Qwen Omni). Any other recognizer would return the spoken
+/// instruction itself, and that must never replace a selection.
+pub fn edit_supported(cfg: &Config) -> bool {
+    assistant_config(cfg, SessionPurpose::Edit).is_some()
 }
 
 /// Selected text as a data block: control characters are dropped (line breaks
@@ -284,7 +298,7 @@ mod tests {
         };
         let text = dictation_instructions_for(&qwen, &env);
         assert!(!text.contains('⟦'));
-        assert!(text.starts_with(FORMAL));
+        assert!(text.starts_with(RAW));
         assert!(text.contains("Могучий; Telegram (телеграм)."));
         assert!(!text.contains("Cursor"));
         assert!(text.contains("текст перед курсором: «Привет»"));
@@ -298,7 +312,15 @@ mod tests {
             ..env
         };
         let text = dictation_instructions_for(&qwen, &dev);
-        assert!(text.starts_with(STRUCTURED) && text.contains("Cursor"));
+        assert!(text.starts_with(RAW) && text.contains("Cursor"));
+
+        let assistant = DictationEnvironment {
+            bundle_id: Some("com.anthropic.claudefordesktop"),
+            ..dev
+        };
+        qwen.output_mode = "light".into();
+        let text = dictation_instructions_for(&qwen, &assistant);
+        assert!(text.starts_with(RAW), "AI chats get the words as said, not a structured list");
     }
 
     #[test]
@@ -368,12 +390,49 @@ mod tests {
         assert_eq!(sanitize_selected_text("a < b and <b>"), "a < b and <b>");
     }
 
+    fn config(provider: &str, model: &str, key: &str) -> Config {
+        let mut cfg: Config = serde_yaml::from_str("{}").unwrap();
+        cfg.asr.provider = provider.into();
+        cfg.asr.qwen.model = model.into();
+        cfg.asr.qwen.api_key = key.into();
+        cfg
+    }
+
     #[test]
-    fn edit_needs_an_omni_recognizer() {
-        assert!(edit_supported("qwen", "qwen3.5-omni-flash-realtime"));
-        assert!(!edit_supported("qwen", "qwen3-asr-flash-realtime"));
-        assert!(!edit_supported("doubao", "qwen3.5-omni-flash-realtime"));
-        assert!(!edit_supported("", ""));
+    fn translate_ask_and_edit_run_on_omni_whatever_dictates() {
+        for (provider, model) in [
+            ("qwen", "qwen3-asr-flash-realtime"),
+            ("mlx", "qwen3-asr-flash-realtime"),
+            ("doubao", ""),
+        ] {
+            let cfg = config(provider, model, "sk-test");
+            for purpose in [SessionPurpose::Translate, SessionPurpose::Ask, SessionPurpose::Edit] {
+                let session = assistant_config(&cfg, purpose).unwrap();
+                assert_eq!(session.asr.provider, "qwen");
+                assert_eq!(session.asr.qwen.model, crate::config::DEFAULT_OMNI_MODEL);
+            }
+            assert!(assistant_config(&cfg, SessionPurpose::Dictate).is_none());
+            assert_eq!(cfg.asr.provider, provider, "the user's config is left alone");
+        }
+    }
+
+    #[test]
+    fn assistant_model_prefers_the_setting_then_an_omni_dictation_model() {
+        let mut cfg = config("qwen", "qwen3.5-omni-flash-realtime", "sk-test");
+        let session = assistant_config(&cfg, SessionPurpose::Ask).unwrap();
+        assert_eq!(session.asr.qwen.model, "qwen3.5-omni-flash-realtime");
+        cfg.asr.qwen.omni_model = " qwen-omni-custom ".into();
+        let session = assistant_config(&cfg, SessionPurpose::Ask).unwrap();
+        assert_eq!(session.asr.qwen.model, "qwen-omni-custom");
+    }
+
+    #[test]
+    fn edit_needs_a_dashscope_key() {
+        assert!(edit_supported(&config("qwen", "qwen3.5-omni-flash-realtime", "sk-test")));
+        assert!(edit_supported(&config("qwen", "qwen3-asr-flash-realtime", "sk-test")));
+        assert!(edit_supported(&config("mlx", "", "sk-test")));
+        assert!(!edit_supported(&config("qwen", "qwen3.5-omni-flash-realtime", " ")));
+        assert!(assistant_config(&config("mlx", "", ""), SessionPurpose::Translate).is_none());
     }
 
     #[test]

@@ -350,7 +350,11 @@ pub extern "C" fn sp_core_session_begin(context: SPSessionContext) -> i32 {
     }
 
     // Capture config for the async task
-    let cfg = &core.config;
+    let assistant_cfg = modes::assistant_config(&core.config, purpose);
+    if purpose != modes::SessionPurpose::Dictate && assistant_cfg.is_none() {
+        log::warn!("{purpose:?} needs Qwen Omni, but there is no DashScope key; using the dictation recognizer");
+    }
+    let cfg = assistant_cfg.as_ref().unwrap_or(&core.config);
     let asr_provider_name = cfg.asr.provider.clone();
 
     // Build the provider outside the async task so that local providers
@@ -1053,7 +1057,7 @@ pub unsafe extern "C" fn sp_core_output_mode_override(bundle_id: *const c_char) 
 #[no_mangle]
 pub extern "C" fn sp_core_edit_supported() -> bool {
     config::load_config()
-        .map(|cfg| modes::edit_supported(&cfg.asr.provider, &cfg.asr.qwen.model))
+        .map(|cfg| modes::edit_supported(&cfg))
         .unwrap_or(false)
 }
 

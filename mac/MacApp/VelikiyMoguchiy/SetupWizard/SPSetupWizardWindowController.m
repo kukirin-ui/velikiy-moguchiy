@@ -1830,9 +1830,9 @@ static NSString *SPCondensedProviderError(NSString *raw) {
 
   NSTextField *qwenAppModesHint = [NSTextField wrappingLabelWithString:
       @"Идентификатор приложения (com.apple.mail) или его имя; подойдёт и "
-      @"начало идентификатора. Если приложения нет в списке: мессенджеры — "
-      @"как сказал, почта — деловой стиль, терминалы, редакторы кода и "
-      @"ИИ-чаты — структура, остальные — режим выше."];
+      @"начало идентификатора. Если приложения нет в списке: мессенджеры, "
+      @"терминалы, редакторы кода и ИИ-чаты — как сказал, остальные — режим "
+      @"выше. Перевод и вопрос всегда идут через Qwen Omni."];
   qwenAppModesHint.font = [NSFont systemFontOfSize:11];
   qwenAppModesHint.textColor = [NSColor secondaryLabelColor];
   CGFloat qwenHintW = fieldW;

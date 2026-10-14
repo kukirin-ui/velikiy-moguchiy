@@ -188,6 +188,10 @@ pub struct QwenAsrConfig {
     /// Omni models only: give the model the window title and the text before the caret
     #[serde(default = "default_true")]
     pub use_field_context: bool,
+    /// Omni model for translate, ask and edit, whatever recognizer dictates.
+    /// Empty: `model` when it is an Omni model, else [`DEFAULT_OMNI_MODEL`].
+    #[serde(default)]
+    pub omni_model: String,
 }
 
 impl QwenAsrConfig {
@@ -205,7 +209,22 @@ impl QwenAsrConfig {
             keys
         }
     }
+
+    /// The model of translate, ask and edit sessions: plain ASR models
+    /// cannot follow instructions, so these always run on Omni.
+    pub fn assistant_model(&self) -> String {
+        let chosen = self.omni_model.trim();
+        if !chosen.is_empty() {
+            chosen.to_string()
+        } else if velikiy_moguchiy_asr::QwenAsrProvider::is_omni_model(&self.model) {
+            self.model.clone()
+        } else {
+            DEFAULT_OMNI_MODEL.to_string()
+        }
+    }
 }
+
+pub const DEFAULT_OMNI_MODEL: &str = "qwen3.8-omni-flash-realtime";
 
 fn default_qwen_output_mode() -> String {
     "raw".into()
@@ -230,6 +249,7 @@ impl Default for QwenAsrConfig {
             translate_to: default_qwen_translate_to(),
             app_modes: std::collections::HashMap::new(),
             use_field_context: true,
+            omni_model: String::new(),
         }
     }
 }
@@ -1472,7 +1492,7 @@ fn default_qwen_url() -> String {
     "wss://dashscope.aliyuncs.com/api-ws/v1/realtime".into()
 }
 fn default_qwen_model() -> String {
-    "qwen3.8-omni-flash-realtime".into()
+    DEFAULT_OMNI_MODEL.into()
 }
 fn default_qwen_language() -> String {
     "zh".into()
@@ -2549,6 +2569,7 @@ asr:
     # app_modes:         # output mode (raw | light | structured | formal) per app bundle id or prefix
     #   com.apple.Notes: light
     # use_field_context: true  # Omni: give the model the window title and the text before the caret
+    # omni_model: ""     # translate / ask / edit model; empty = model above if Omni, else qwen3.8-omni-flash-realtime
     # headers:           # custom HTTP headers for WebSocket connection
     #   X-Custom-Header: "value"
 
