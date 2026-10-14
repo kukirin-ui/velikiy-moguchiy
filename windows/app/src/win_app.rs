@@ -12,6 +12,7 @@ use std::time::Instant;
 use velikiy_moguchiy_core::config;
 use velikiy_moguchiy_win32::form::{Field, Form, FormEvent, Value};
 use velikiy_moguchiy_win32::hook::{KeyEvent, KeyboardHook};
+#[cfg(not(feature = "smoke"))]
 use velikiy_moguchiy_win32::mic::Mic;
 use velikiy_moguchiy_win32::overlay::{self, Overlay};
 use velikiy_moguchiy_win32::shell::{self, MenuItem, Shell, ShellEvent, Waker};
@@ -27,6 +28,9 @@ use velikiy_moguchiy_windows::logfile;
 use velikiy_moguchiy_windows::settings::{
     self, Settings, LANGUAGES, PROVIDER_LOCAL, PROVIDER_QWEN, QWEN_MODELS,
 };
+
+#[cfg(feature = "smoke")]
+use crate::smoke::FakeMic as Mic;
 
 const APP_NAME: &str = "«Великий & Могучий»";
 const TIMER_TICK: usize = 1;
@@ -725,7 +729,9 @@ pub fn run() {
     let hook_queue = queue.clone();
     let hook = match KeyboardHook::install(Box::new(move |e: KeyEvent| {
         let mut f = hook_filter.lock().unwrap_or_else(|e| e.into_inner());
-        let verdict = f.on_key(e.vk, e.down, u64::from(e.time_ms), e.injected);
+        // The smoke test presses the dictation key with SendInput.
+        let injected = e.injected && !cfg!(feature = "smoke");
+        let verdict = f.on_key(e.vk, e.down, u64::from(e.time_ms), injected);
         // Releasing Alt alone would open the focused window's menu bar.
         if e.down && !e.injected && e.vk == VK_RMENU && f.key() == TriggerKey::RightAlt {
             input::mask_alt_release();
@@ -761,6 +767,24 @@ pub fn run() {
     if let Some(problem) = first_run_problem {
         tray.notify(APP_NAME, problem);
     }
+    #[cfg(feature = "smoke")]
+    crate::smoke::write_report(&serde_json::json!({
+        "pid": std::process::id(),
+        "data_dir": data_dir,
+        "config_path": config::config_path(),
+        "config_exists": config::config_path().is_file(),
+        "log_path": log_path,
+        "core_started": true,
+        "hook_installed": true,
+        "tray_added": tray.added(),
+        "provider": settings.provider,
+        "qwen_model": settings.qwen_model,
+        "qwen_language": settings.qwen_language,
+        "trigger_key": settings.trigger_key.config_value(),
+        "trigger_mode": settings.trigger_mode.config_value(),
+        "has_key": !settings.qwen_key.is_empty(),
+        "setup_problem": first_run_problem,
+    }));
 
     let app = App {
         shell,

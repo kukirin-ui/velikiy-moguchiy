@@ -21,6 +21,10 @@ default = []
 # synthesis, which ends up in the executable, so a build with this feature
 # cannot be distributed under MIT alone; release builds leave it off.
 sherpa-onnx = ["velikiy-moguchiy-core/sherpa-onnx"]
+# Test hooks for the CI smoke run (src/smoke.rs): a generated tone instead of
+# the microphone, the dictation key accepted from SendInput, a startup report.
+# Never in release builds.
+smoke = []
 
 [dependencies]
 base64 = "0.22"
