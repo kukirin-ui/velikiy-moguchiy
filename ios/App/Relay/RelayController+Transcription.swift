@@ -132,6 +132,7 @@ extension RelayController {
     beginTranscriptionBackgroundTaskIfNeeded()
 
     let apiKey = configuration.apiKey
+    let region = configuration.dashScopeRegion
     let language = DictationLanguage.resolve(segment.languageCode)
     let recoverableRecording: RecoverableRecording
     do {
@@ -194,7 +195,8 @@ extension RelayController {
             outputText = try await fallbackResult(
               from: segment.url,
               language: language,
-              apiKey: apiKey
+              apiKey: apiKey,
+              region: region
             )
             usedLiveStream = false
           }
@@ -202,7 +204,8 @@ extension RelayController {
           outputText = try await fallbackResult(
             from: segment.url,
             language: language,
-            apiKey: apiKey
+            apiKey: apiKey,
+            region: region
           )
           usedLiveStream = false
         }
@@ -217,6 +220,7 @@ extension RelayController {
         }
 
         try completeTranscription(outputText, requestID: requestID, action: action)
+        configuration.markKeyVerified()
         do {
           try recoveryStore.remove(id: recoverableRecording.id)
         } catch {
@@ -302,13 +306,15 @@ extension RelayController {
   func fallbackResult(
     from segmentURL: URL,
     language: DictationLanguage,
-    apiKey: String
+    apiKey: String,
+    region: DashScopeRegion
   ) async throws -> String {
     try Task.checkCancellation()
     return try await transcriber.transcribe(
       recordingAt: segmentURL,
       language: language,
-      apiKey: apiKey
+      apiKey: apiKey,
+      region: region
     )
   }
 

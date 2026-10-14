@@ -65,6 +65,7 @@ extension RelayController {
     beginTranscriptionBackgroundTaskIfNeeded()
 
     let apiKey = configuration.apiKey
+    let region = configuration.dashScopeRegion
     let language = DictationLanguage.resolve(recording.languageCode)
     recoveryRetryTask = Task { [weak self] in
       guard let self else { return }
@@ -78,10 +79,12 @@ extension RelayController {
         let outputText = try await fallbackResult(
           from: audioURL,
           language: language,
-          apiKey: apiKey
+          apiKey: apiKey,
+          region: region
         )
         try Task.checkCancellation()
         try completeTranscription(outputText, requestID: retryRequestID, action: recording.action)
+        configuration.markKeyVerified()
         do {
           try recoveryStore.remove(id: recording.id)
         } catch {

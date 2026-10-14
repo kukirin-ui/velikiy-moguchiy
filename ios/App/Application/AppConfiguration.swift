@@ -8,6 +8,7 @@ final class AppConfiguration: ObservableObject {
     static let historyRetentionDays = "configuration.history-retention-days"
     static let noteLanguageCode = "configuration.note-language"
     static let stopInLowPowerMode = "configuration.stop-in-low-power-mode"
+    static let keyVerified = "configuration.dashscope-key-verified"
   }
 
   private let defaults: UserDefaults
@@ -18,6 +19,7 @@ final class AppConfiguration: ObservableObject {
   /// Keychain; the keyboards never see it, because the app does the networking.
   @Published var apiKeyOverride: String {
     didSet {
+      if Self.trimmed(oldValue) != Self.trimmed(apiKeyOverride) { isKeyVerified = false }
       if credentialStore.saveAPIKey(apiKeyOverride) {
         defaults.removeObject(forKey: Key.legacyAPIKey)
         credentialPersistenceWarning = nil
@@ -31,6 +33,20 @@ final class AppConfiguration: ObservableObject {
   }
 
   @Published private(set) var credentialPersistenceWarning: String?
+
+  /// Which DashScope endpoint the key belongs to.
+  @Published var dashScopeRegion: DashScopeRegion {
+    didSet {
+      defaults.set(dashScopeRegion.rawValue, forKey: DashScopeRegion.defaultsKey)
+      if oldValue != dashScopeRegion { isKeyVerified = false }
+    }
+  }
+
+  /// The current key and region opened a DashScope session (a key check or a
+  /// finished dictation). Any change to either clears it.
+  @Published private(set) var isKeyVerified: Bool {
+    didSet { defaults.set(isKeyVerified, forKey: Key.keyVerified) }
+  }
 
   @Published var historyRetentionDays: Int {
     didSet {
@@ -122,6 +138,14 @@ final class AppConfiguration: ObservableObject {
       }
     #endif
     self.apiKeyOverride = secured
+    self.isKeyVerified = CredentialAvailability.isUsable(secured) && defaults.bool(forKey: Key.keyVerified)
+    let region = DashScopeRegion.resolve(
+      stored: defaults.string(forKey: DashScopeRegion.defaultsKey),
+      hasExistingKey: CredentialAvailability.isUsable(secured)
+    )
+    self.dashScopeRegion = region
+    // Pin the choice now, so adding a key later does not move a new install to China.
+    defaults.set(region.rawValue, forKey: DashScopeRegion.defaultsKey)
     self.credentialPersistenceWarning = nil
     defaults.removeObject(forKey: Key.legacyAPIKey)
     publishCredentialAvailability()
@@ -133,7 +157,29 @@ final class AppConfiguration: ObservableObject {
   }
 
   var apiKey: String {
-    apiKeyOverride.trimmingCharacters(in: .whitespacesAndNewlines)
+    Self.trimmed(apiKeyOverride)
+  }
+
+  func markKeyVerified() {
+    if hasUsableAPIKey, !isKeyVerified { isKeyVerified = true }
+  }
+
+  /// Applies a finished key check; a key that works only in the other region
+  /// switches the region, since that is the only setting that can be wrong.
+  func apply(_ outcome: DashScopeKeyCheck.Outcome) {
+    switch outcome {
+    case .works:
+      markKeyVerified()
+    case .worksInOtherRegion(let region):
+      dashScopeRegion = region
+      markKeyVerified()
+    case .failed:
+      isKeyVerified = false
+    }
+  }
+
+  private static func trimmed(_ value: String) -> String {
+    value.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   var noteLanguage: DictationLanguage {

@@ -15,7 +15,7 @@
   │
   ▼
 Приложение: AudioCaptureEngine ─ PCM16 16 кГц, куски по 100 мс ─▶ DashScopeRealtimeSession
-  │                                         wss://dashscope.aliyuncs.com/api-ws/v1/realtime
+  │                     wss://dashscope-intl.aliyuncs.com или dashscope.aliyuncs.com (регион ключа)
   ▼
 Результат (тот же канал) ─▶ UITextDocumentProxy.insertText (только если документ и контекст совпали)
 ```

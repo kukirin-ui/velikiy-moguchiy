@@ -65,12 +65,12 @@ actor DashScopeRealtimeSession {
 
   // MARK: Connection
 
-  func connect(apiKey: String) async throws {
+  func connect(apiKey: String, region: DashScopeRegion) async throws {
     guard socket == nil, !isClosed else {
       throw DashScopeSpeechError.alreadyConnected
     }
 
-    let endpoint = try DashScopeProtocol.endpoint(apiKey: apiKey)
+    let endpoint = try DashScopeProtocol.endpoint(apiKey: apiKey, region: region)
     let socket = socketFactory(endpoint)
     self.socket = socket
     await socket.start()

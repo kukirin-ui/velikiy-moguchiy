@@ -12,7 +12,8 @@ struct DashScopeRecordingTranscriber: Sendable {
   func transcribe(
     recordingAt url: URL,
     language: DictationLanguage,
-    apiKey: String
+    apiKey: String,
+    region: DashScopeRegion
   ) async throws -> String {
     let chunks = try await Task.detached(priority: .userInitiated) {
       try WAVPCMConverter.pcm16kChunks(from: url)
@@ -21,7 +22,7 @@ struct DashScopeRecordingTranscriber: Sendable {
 
     let session = DashScopeRealtimeSession(language: language, socketFactory: socketFactory)
     do {
-      try await session.connect(apiKey: apiKey)
+      try await session.connect(apiKey: apiKey, region: region)
       for chunk in chunks {
         try Task.checkCancellation()
         try await session.sendPCM(chunk)

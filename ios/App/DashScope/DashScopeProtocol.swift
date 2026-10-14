@@ -81,9 +81,8 @@ enum DashScopeProtocol {
     }
   }
 
-  static func endpoint(apiKey: String, baseURL: String = "wss://dashscope.aliyuncs.com") throws
-    -> DashScopeEndpoint
-  {
+  static func endpoint(apiKey: String, region: DashScopeRegion) throws -> DashScopeEndpoint {
+    let baseURL = region.realtimeBaseURL
     let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
     guard CredentialAvailability.isUsable(key) else {
       throw DashScopeSpeechError.missingCredential

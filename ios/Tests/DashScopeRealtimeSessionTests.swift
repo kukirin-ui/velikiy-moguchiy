@@ -30,17 +30,20 @@ final class DashScopeProtocolTests: XCTestCase {
   }
 
   func testEndpointUsesBearerHeaderAndKeepsTheKeyOutOfTheURL() throws {
-    let endpoint = try DashScopeProtocol.endpoint(apiKey: "  sk-secret-123 \n")
+    let endpoint = try DashScopeProtocol.endpoint(apiKey: "  sk-secret-123 \n", region: .china)
     XCTAssertEqual(endpoint.headers["Authorization"], "Bearer sk-secret-123")
     XCTAssertEqual(endpoint.url.scheme, "wss")
     XCTAssertEqual(endpoint.url.host, "dashscope.aliyuncs.com")
+    XCTAssertEqual(
+      try DashScopeProtocol.endpoint(apiKey: "sk-1", region: .international).url.host,
+      "dashscope-intl.aliyuncs.com")
     XCTAssertEqual(endpoint.url.path, "/api-ws/v1/realtime")
     XCTAssertEqual(endpoint.url.query, "model=qwen3.8-omni-flash-realtime")
     XCTAssertFalse(endpoint.url.absoluteString.contains("sk-secret"))
   }
 
   func testEndpointRejectsMissingKey() {
-    XCTAssertThrowsError(try DashScopeProtocol.endpoint(apiKey: "  ")) { error in
+    XCTAssertThrowsError(try DashScopeProtocol.endpoint(apiKey: "  ", region: .international)) { error in
       guard case DashScopeSpeechError.missingCredential = error else {
         return XCTFail("unexpected \(error)")
       }
@@ -109,7 +112,7 @@ final class DashScopeRealtimeSessionTests: XCTestCase {
   func testDictationFollowsTheVerifiedMessageSequence() async throws {
     let (session, socket, previews) = makeSession(
       script: .init(finalText: "Привет, это проверка. Как дела?"))
-    try await session.connect(apiKey: "sk-test")
+    try await session.connect(apiKey: "sk-test", region: .international)
     stream(session, seconds: 0.5)
     let text = try await session.finish()
 
@@ -128,7 +131,7 @@ final class DashScopeRealtimeSessionTests: XCTestCase {
   func testEnglishKeyboardSendsEnglishLanguageAndInstructions() async throws {
     let (session, socket, _) = makeSession(
       language: .english, script: .init(finalText: "Hello, how are you?"))
-    try await session.connect(apiKey: "sk-test")
+    try await session.connect(apiKey: "sk-test", region: .international)
     stream(session, seconds: 0.3)
     let text = try await session.finish()
     XCTAssertEqual(text, "Hello, how are you?")
@@ -139,7 +142,7 @@ final class DashScopeRealtimeSessionTests: XCTestCase {
 
   func testWrappingGuillemetsAreStripped() async throws {
     let (session, _, _) = makeSession(script: .init(finalText: "«Привет, мир.»"))
-    try await session.connect(apiKey: "sk-test")
+    try await session.connect(apiKey: "sk-test", region: .international)
     stream(session, seconds: 0.3)
     let text = try await session.finish()
     XCTAssertEqual(text, "Привет, мир.")
@@ -147,7 +150,7 @@ final class DashScopeRealtimeSessionTests: XCTestCase {
 
   func testSilenceNeverCommitsAndReportsNoSpeech() async throws {
     let (session, socket, _) = makeSession(script: .init(finalText: "invented text"))
-    try await session.connect(apiKey: "sk-test")
+    try await session.connect(apiKey: "sk-test", region: .international)
     for _ in 0..<5 { session.enqueueAudio(Data(count: PCM16StreamChunker.targetBytesPerChunk)) }
     do {
       _ = try await session.finish()
@@ -159,7 +162,7 @@ final class DashScopeRealtimeSessionTests: XCTestCase {
 
   func testServiceErrorSurfaces() async throws {
     let (session, _, _) = makeSession(script: .init(errorOnResponse: "Invalid voice"))
-    try await session.connect(apiKey: "sk-test")
+    try await session.connect(apiKey: "sk-test", region: .international)
     stream(session, seconds: 0.3)
     do {
       _ = try await session.finish()
@@ -174,7 +177,7 @@ final class DashScopeRealtimeSessionTests: XCTestCase {
     var script = FakeDashScopeSocket.Script(finalText: "Готово.")
     script.emitDoneEvent = false
     let (session, _, _) = makeSession(script: script)
-    try await session.connect(apiKey: "sk-test")
+    try await session.connect(apiKey: "sk-test", region: .international)
     stream(session, seconds: 0.3)
     let text = try await session.finish()
     XCTAssertEqual(text, "Готово.")
@@ -182,7 +185,7 @@ final class DashScopeRealtimeSessionTests: XCTestCase {
 
   func testCancelClosesWithoutCommitting() async throws {
     let (session, socket, _) = makeSession(script: .init(finalText: "x"))
-    try await session.connect(apiKey: "sk-test")
+    try await session.connect(apiKey: "sk-test", region: .international)
     stream(session, seconds: 0.3)
     await session.cancel()
     XCTAssertTrue(socket.wasClosed)
@@ -194,7 +197,7 @@ final class DashScopeRealtimeSessionTests: XCTestCase {
     let (session, socket, _) = makeSession(script: .init(finalText: "Ок."))
     // Audio arrives while the socket is still handshaking.
     stream(session, seconds: 0.3)
-    try await session.connect(apiKey: "sk-test")
+    try await session.connect(apiKey: "sk-test", region: .international)
     _ = try await session.finish()
     let types = socket.messageTypes
     XCTAssertEqual(types.first, "session.update")
@@ -208,7 +211,7 @@ final class DashScopeRealtimeSessionTests: XCTestCase {
 
     let socket = FakeDashScopeSocket(script: .init(finalText: "Из записи."))
     let transcriber = DashScopeRecordingTranscriber(socketFactory: { _ in socket })
-    let text = try await transcriber.transcribe(recordingAt: url, language: .russian, apiKey: "sk-test")
+    let text = try await transcriber.transcribe(recordingAt: url, language: .russian, apiKey: "sk-test", region: .international)
     XCTAssertEqual(text, "Из записи.")
 
     let appended = socket.messages.filter { $0["type"] as? String == "input_audio_buffer.append" }

@@ -74,8 +74,9 @@ extension RelayController {
     activeLiveSession = liveSession
     lastLivePreviewAt = .distantPast
     let apiKey = configuration.apiKey
+    let region = configuration.dashScopeRegion
     liveConnectionTask = Task {
-      try await liveSession.connect(apiKey: apiKey)
+      try await liveSession.connect(apiKey: apiKey, region: region)
     }
 
     let chunkHandler: @Sendable (Data) -> Void = { data in

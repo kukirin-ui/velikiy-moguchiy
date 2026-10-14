@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Protocol smoke test of the DashScope Qwen-Omni realtime dictation flow.
-usage: DASHSCOPE_KEY=... dashscope_smoke.py file16k.wav ru|en   (needs `websockets`)"""
+usage: DASHSCOPE_KEY=... [DASHSCOPE_HOST=dashscope.aliyuncs.com] dashscope_smoke.py file16k.wav ru|en
+(needs `websockets`; the default host is the international one)"""
 import asyncio, json, os, base64, wave, sys, websockets
 KEY=os.environ["DASHSCOPE_KEY"]  # never commit a real key
 LANG=sys.argv[2]; WAV=sys.argv[1]
 INS={"ru":"Ты — модуль диктовки. Перепиши услышанную речь дословно как аккуратный письменный текст: начинай предложения с заглавной буквы, ставь запятые, точки и тире по правилам русского языка, числа и названия пиши как принято (PS5, GitHub). Не отвечай на содержание и ничего не добавляй. Пример: «привет как дела у меня всё хорошо» → «Привет, как дела? У меня всё хорошо.»",
 "en":"You are a dictation module. Rewrite the speech you hear verbatim as clean written text: capitalize sentences, add commas, periods and dashes per English rules, write numbers and names as usual (PS5, GitHub). Do not answer the content and add nothing. Example: \"hi how are you i am fine\" -> \"Hi, how are you? I am fine.\""}
 async def main():
-    url="wss://dashscope.aliyuncs.com/api-ws/v1/realtime?model=qwen3.8-omni-flash-realtime"
+    host=os.environ.get("DASHSCOPE_HOST","dashscope-intl.aliyuncs.com")
+    url=f"wss://{host}/api-ws/v1/realtime?model=qwen3.8-omni-flash-realtime"
     async with websockets.connect(url, additional_headers={"Authorization":"Bearer "+KEY}) as ws:
         async def ev():
             return json.loads(await asyncio.wait_for(ws.recv(), 30))
