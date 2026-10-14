@@ -11,6 +11,7 @@
 #import "SPSettingsSidebar.h"
 #import "SPSettingsViews.h"
 #import "SPTheme.h"
+#import "SPTriggerKeyPolicy.h"
 #import <Carbon/Carbon.h>
 #import <Cocoa/Cocoa.h>
 #import <Speech/Speech.h>
@@ -3500,6 +3501,7 @@ static NSString *SPCondensedProviderError(NSString *raw) {
 }
 
 - (void)triggerHotkeyChanged:(id)sender {
+  [self warnAboutFnConflictIfNeeded];
 }
 
 - (void)updateHotkeyRecordingButtons {
@@ -3510,43 +3512,6 @@ static NSString *SPCondensedProviderError(NSString *raw) {
   self.resetTriggerHotkeyButton.enabled = !recordingTrigger;
   [self.recordTriggerHotkeyButton
       setTitle:(recordingTrigger ? @"Нажмите…" : @"Записать")];
-}
-
-- (NSString *)recordedHotkeyValueFromEvent:(NSEvent *)event {
-  NSInteger keyCode = event.keyCode;
-  switch (keyCode) {
-  case 54:
-  case 55:
-  case 56:
-  case 57:
-  case 58:
-  case 59:
-  case 60:
-  case 61:
-  case 62:
-  case 63:
-    return nil;
-  default:
-    break;
-  }
-
-  NSUInteger flags = event.modifierFlags &
-                     (NSEventModifierFlagCommand | NSEventModifierFlagOption |
-                      NSEventModifierFlagControl | NSEventModifierFlagShift |
-                      NSEventModifierFlagFunction);
-  NSMutableArray<NSString *> *parts = [NSMutableArray array];
-  if ((flags & NSEventModifierFlagCommand) != 0)
-    [parts addObject:@"command"];
-  if ((flags & NSEventModifierFlagOption) != 0)
-    [parts addObject:@"option"];
-  if ((flags & NSEventModifierFlagControl) != 0)
-    [parts addObject:@"control"];
-  if ((flags & NSEventModifierFlagShift) != 0)
-    [parts addObject:@"shift"];
-  if ((flags & NSEventModifierFlagFunction) != 0)
-    [parts addObject:@"fn"];
-  [parts addObject:[NSString stringWithFormat:@"%ld", (long)keyCode]];
-  return normalizedHotkeyValue([parts componentsJoinedByString:@"+"]);
 }
 
 - (void)endHotkeyRecording {
@@ -3568,6 +3533,12 @@ static NSString *SPCondensedProviderError(NSString *raw) {
   [self updateHotkeyRecordingButtons];
 
   __weak typeof(self) weakSelf = self;
+  // A modifier counts once it is let go with no key pressed meanwhile: -1 is
+  // none yet, -2 a chord, otherwise the keycode of the lone modifier.
+  __block NSInteger loneModifier = -1;
+  NSUInteger modifierMask = NSEventModifierFlagCommand | NSEventModifierFlagOption |
+                            NSEventModifierFlagControl | NSEventModifierFlagShift |
+                            NSEventModifierFlagFunction;
   self.hotkeyRecordingMonitor = [NSEvent
       addLocalMonitorForEventsMatchingMask:(NSEventMaskKeyDown |
                                             NSEventMaskFlagsChanged)
@@ -3577,28 +3548,74 @@ static NSString *SPCondensedProviderError(NSString *raw) {
                                        return event;
                                      }
 
-                                     if (event.type == NSEventTypeKeyDown &&
-                                         event.keyCode == 53) {
+                                     if (event.type == NSEventTypeFlagsChanged) {
+                                       if ((event.modifierFlags & modifierMask) != 0) {
+                                         loneModifier = loneModifier == -1 ? event.keyCode : -2;
+                                       } else {
+                                         NSInteger keyCode = loneModifier;
+                                         loneModifier = -1;
+                                         if (keyCode >= 0) {
+                                           [weakSelf finishHotkeyRecording:
+                                                         [SPRecordedTrigger triggerForModifierKeyCode:keyCode]
+                                                                    popup:popup];
+                                         }
+                                       }
+                                       return nil;
+                                     }
+
+                                     if (event.keyCode == 53 &&
+                                         (event.modifierFlags & modifierMask) == 0) {
                                        [weakSelf endHotkeyRecording];
                                        return nil;
                                      }
 
-                                     if (event.type != NSEventTypeKeyDown ||
-                                         [event isARepeat]) {
+                                     if ([event isARepeat]) {
                                        return nil;
                                      }
-
-                                     NSString *recordedValue = [weakSelf
-                                         recordedHotkeyValueFromEvent:event];
-                                     if (recordedValue.length == 0) {
-                                       return nil;
-                                     }
-
-                                     [weakSelf selectHotkeyValue:recordedValue
-                                                         inPopup:popup];
-                                     [weakSelf endHotkeyRecording];
+                                     loneModifier = -2;
+                                     [weakSelf finishHotkeyRecording:
+                                                   [SPRecordedTrigger triggerForKeyCode:event.keyCode
+                                                                          modifierFlags:event.modifierFlags]
+                                                              popup:popup];
                                      return nil;
                                    }];
+}
+
+- (void)finishHotkeyRecording:(SPRecordedTrigger *)trigger popup:(NSPopUpButton *)popup {
+  [self endHotkeyRecording];
+  if (trigger.value.length == 0) {
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.alertStyle = NSAlertStyleInformational;
+    alert.messageText = @"Эту клавишу нельзя назначить";
+    alert.informativeText = trigger.refusal ?: @"";
+    [alert addButtonWithTitle:@"Понятно"];
+    [alert beginSheetModalForWindow:self.window completionHandler:nil];
+    return;
+  }
+  [self selectHotkeyValue:trigger.value inPopup:popup];
+  [self warnAboutFnConflictIfNeeded];
+}
+
+/// Fn chosen while the 🌐 key also does something of its own.
+- (void)warnAboutFnConflictIfNeeded {
+  NSString *selected = [self.hotkeyPopup.selectedItem.representedObject description];
+  if (![selected isEqualToString:@"fn"])
+    return;
+  NSString *conflict = SPFnUsageConflict(SPFnUsageType());
+  if (!conflict)
+    return;
+  NSAlert *alert = [[NSAlert alloc] init];
+  alert.alertStyle = NSAlertStyleWarning;
+  alert.messageText = @"Клавиша Fn (🌐) занята системой";
+  alert.informativeText = SPFnConflictExplanation(conflict);
+  [alert addButtonWithTitle:@"Открыть «Клавиатуру»"];
+  [alert addButtonWithTitle:@"Оставить Fn"];
+  [alert beginSheetModalForWindow:self.window
+                completionHandler:^(NSModalResponse response) {
+                  if (response == NSAlertFirstButtonReturn) {
+                    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:SPKeyboardSettingsURL]];
+                  }
+                }];
 }
 
 - (void)recordTriggerHotkey:(id)sender {
@@ -3608,6 +3625,7 @@ static NSString *SPCondensedProviderError(NSString *raw) {
 - (void)resetTriggerHotkey:(id)sender {
   [self endHotkeyRecording];
   [self selectHotkeyValue:@"fn" inPopup:self.hotkeyPopup];
+  [self warnAboutFnConflictIfNeeded];
 }
 
 - (NSView *)buildDictionaryPane {

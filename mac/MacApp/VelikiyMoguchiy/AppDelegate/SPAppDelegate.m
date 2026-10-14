@@ -32,6 +32,7 @@
 #import "SPAppPaths.h"
 #import "SPErrorExplainer.h"
 #import "SPHotkeyNames.h"
+#import "SPTriggerKeyPolicy.h"
 #import <os/log.h>
 #import <sys/stat.h>
 #import <UserNotifications/UserNotifications.h>
@@ -614,6 +615,8 @@ static BOOL SPLabFlag(const char *name) {
                 [self.cuePlayer playError];
                 [self.permissionManager showPermissionAlertForType:SPPermissionTypeMicrophone
                                                        settingsURL:[SPPermissionManager settingsURLForType:SPPermissionTypeMicrophone]];
+            } else {
+                [self warnAboutFnConflictIfNeeded];
             }
         });
     }];
@@ -629,6 +632,34 @@ static BOOL SPLabFlag(const char *name) {
     self.audioPreparationEnabled = YES;
     if (![self prepareAudioQueueForResolvedDevice]) {
         NSLog(@"[VelikiyMoguchiy] Initial audio queue preparation failed; trigger-down will retry");
+    }
+}
+
+/// An Fn trigger on a Mac whose 🌐 key also switches the layout, opens the
+/// emoji picker or starts the system dictation: said once per such setting.
+- (void)warnAboutFnConflictIfNeeded {
+    if (![[configStringValue("hotkey.trigger_key") lowercaseString] isEqualToString:@"fn"]) return;
+    NSInteger usage = SPFnUsageType();
+    NSString *conflict = SPFnUsageConflict(usage);
+    if (!conflict) return;
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    NSString *warnedKey = @"SPFnConflictWarnedUsage";
+    if ([defaults objectForKey:warnedKey] && [defaults integerForKey:warnedKey] == usage) return;
+    [defaults setInteger:usage forKey:warnedKey];
+
+    [NSApp activateIgnoringOtherApps:YES];
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.alertStyle = NSAlertStyleWarning;
+    alert.messageText = @"Клавиша Fn (🌐) занята системой";
+    alert.informativeText = SPFnConflictExplanation(conflict);
+    [alert addButtonWithTitle:@"Открыть «Клавиатуру»"];
+    [alert addButtonWithTitle:@"Выбрать другую клавишу"];
+    [alert addButtonWithTitle:@"Оставить Fn"];
+    NSModalResponse response = [alert runModal];
+    if (response == NSAlertFirstButtonReturn) {
+        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:SPKeyboardSettingsURL]];
+    } else if (response == NSAlertSecondButtonReturn) {
+        [self showSettingsPane:@"hotkey"];
     }
 }
 
