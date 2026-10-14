@@ -1,0 +1,76 @@
+name: iOS keyboard parity
+
+# Builds the iOS app for the simulator and runs the «как у Apple» gate
+# (ios/Scripts/parity/parity.sh): Apple's system keyboard and ours over the same
+# text field, every field type, light and dark, 1 pt tolerance. Runs only when
+# ios/ (or this workflow) changes, because macOS minutes are scarce. The report
+# is uploaded as an artifact whether the gate passes or not.
+
+on:
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-parity.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-parity.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-parity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  HOMEBREW_NO_AUTO_UPDATE: 1
+  HOMEBREW_NO_INSTALL_CLEANUP: 1
+
+jobs:
+  parity:
+    name: Keyboard parity (simulator)
+    runs-on: macos-26
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install XcodeGen and Python packages
+        run: |
+          brew install xcodegen
+          python -m pip install numpy pillow
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes | grep -i ios
+
+      - name: Parity gate
+        # Builds the app, our keyboards and the parity host for the simulator.
+        # Apple's keyboards are photographed in the same run when the runner's
+        # iOS has no references in Tests/Reference/Apple/simulator yet.
+        run: Scripts/parity/parity.sh
+
+      - name: Upload the parity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyboard-parity-report
+          path: |
+            ios/build/parity/report
+            ios/build/parity/*.log
+          if-no-files-found: warn
