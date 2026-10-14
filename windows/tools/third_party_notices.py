@@ -25,7 +25,7 @@ section = mac_notices.section
 
 
 def run(*args):
-    return subprocess.run(args, cwd=WINDOWS, check=True, capture_output=True, text=True).stdout
+    return subprocess.run(args, cwd=WINDOWS, check=True, capture_output=True, encoding="utf-8").stdout
 
 
 def crates():
