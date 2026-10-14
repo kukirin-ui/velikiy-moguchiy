@@ -15,6 +15,8 @@
 | Страница статистики `docs/STATS.md` | раз в день, коммит только при изменении цифр | `.github/workflows/stats.yml` |
 | Таблица участников в README | при изменении `contributors.json` | `.github/workflows/contributors.yml` |
 | Проверка журнала исключений | PR, меняющий `data-governance/` | `.github/workflows/data-governance.yml` |
+| Запуск клавиатуры Android на эмуляторе: установка, включение через adb, набор клавишами, диктовка через подставной сервер, микрофон | PR, меняющий `android/`; каждую ночь; вручную | `.github/workflows/smoke-android.yml`, `android/scripts/emulator-tests.sh` |
+| Запуск программы для Windows: старт с временными настройками, значок в трее, диктовка в Блокнот через подставной сервер, чистый выход | PR, меняющий `windows/` или ядро; каждую ночь; вручную | `.github/workflows/smoke-windows.yml`, `windows/tools/smoke/` |
 | Сборка приложения для Mac и IPA | метка `build` на PR, теги `mac-v*` и `ios-v*`, вручную | `.github/workflows/build-apple.yml` |
 | Релиз: версия, тег, сборки для всех платформ, заметки, публикация | раз в день, если с прошлого релиза изменился продукт и проверки `main` зелёные; вручную | `.github/workflows/release.yml`, `tools/release/plan.py`, `.github/release-notes.md` |
 | Черновик релиза | тег `v*`, поставленный вручную (черновик публикуется вручную) | `.github/workflows/release.yml` |
@@ -99,7 +101,8 @@ gh secret set BOT_PUSH_KEY -R zigansh1n/velikiy-moguchiy < bot_push_key
    (`tools/text_review.py --file`); замечание важности medium или high останавливает релиз. Исправление —
    поправить заголовок PR на GitHub и запустить workflow ещё раз (или дождаться следующего дня).
 6. **Проверки перед сборкой.** Как и у черновика: `privacy_guard.py` на дереве выпускаемого коммита, у коммита автор и
-   коммиттер — адреса GitHub no-reply; после сборки `tools/scan_artifacts.py` читает все файлы внутри сборок.
+   коммиттер — адреса GitHub no-reply; после сборки `tools/scan_artifacts.py` читает все файлы внутри сборок. Адреса
+   авторов шрифтов в самих шрифтах и встроенные адреса OpenSSL он не считает находками.
 7. **Сборка и публикация.** Выбранный коммит собирается теми же `build-apple.yml`, `build-android.yml` и
    `build-windows.yml` с номером версии. Релиз сначала создаётся черновиком со всеми файлами и `SHA256SUMS.txt`,
    затем публикуется и помечается последним; тег ставится на коммит в момент публикации. Если что-то упало, тега
