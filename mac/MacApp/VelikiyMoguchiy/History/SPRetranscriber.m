@@ -1,5 +1,6 @@
 #import "SPRetranscriber.h"
 #import "SPHistoryManager.h"
+#import "SPErrorExplainer.h"
 
 NSNotificationName const SPRetranscriptionStateDidChangeNotification =
     @"SPRetranscriptionStateDidChangeNotification";
@@ -206,40 +207,30 @@ static NSString *const kNoSpeechReason = @"в записи не было реч�
                                     providerMessage:provider];
 }
 
-static BOOL containsAny(NSString *text, NSArray<NSString *> *markers) {
-    for (NSString *marker in markers) {
-        if ([text containsString:marker]) return YES;
-    }
-    return NO;
-}
-
-static BOOL mentionsHttpStatus(NSString *text, NSString *alternatives) {
-    NSString *pattern = [NSString stringWithFormat:@"\\b(%@)\\b", alternatives];
-    return [text rangeOfString:pattern options:NSRegularExpressionSearch].location != NSNotFound;
-}
-
 + (NSString *)summaryForProviderMessage:(NSString *)message {
-    NSString *lower = message.lowercaseString;
-    if (lower.length == 0) return @"ошибка распознавания";
-    if ([lower containsString:@"ffmpeg"]) return @"не удалось декодировать запись (ffmpeg)";
-    if (containsAny(lower, @[ @"timed out", @"timeout" ])) {
-        return @"сервис распознавания не ответил вовремя";
+    if (message.length == 0) return @"ошибка распознавания";
+    if ([message.lowercaseString containsString:@"ffmpeg"]) return @"не удалось декодировать запись (ffmpeg)";
+    switch ([SPErrorExplainer kindForMessage:message]) {
+        case SPErrorKindNoKey:
+        case SPErrorKindBadKey:
+        case SPErrorKindAccessDenied:
+            return @"проблема с API-ключом";
+        case SPErrorKindNoBalance:
+        case SPErrorKindRateLimit:
+            return @"лимит или баланс ключа исчерпан";
+        case SPErrorKindTimeout:
+            return @"сервис распознавания не ответил вовремя";
+        case SPErrorKindNetwork:
+            return @"нет связи с сервисом распознавания";
+        case SPErrorKindService:
+            return @"сбой сервиса распознавания";
+        case SPErrorKindLocalModel:
+            return @"нет локальной модели распознавания";
+        case SPErrorKindMicrophone:
+            return @"проблема с аудио";
+        case SPErrorKindUnknown:
+            break;
     }
-    if (containsAny(lower, @[ @"invalidapikey", @"invalid_api", @"invalid api", @"incorrect api",
-                              @"api_key", @"unauthorized", @"not authorized", @"access denied",
-                              @"accessdenied", @"credential" ]) ||
-        mentionsHttpStatus(lower, @"401|403")) {
-        return @"проблема с API-ключом";
-    }
-    if (containsAny(lower, @[ @"quota", @"throttl", @"arrearage", @"overdue", @"good standing",
-                              @"rate limit", @"request limit", @"budgetlimit", @"limit_" ]) ||
-        mentionsHttpStatus(lower, @"429")) {
-        return @"лимит или баланс ключа исчерпан";
-    }
-    if (containsAny(lower, @[ @"connect", @"websocket", @"network", @"dns", @"tls", @"closed" ])) {
-        return @"нет связи с сервисом распознавания";
-    }
-    if (containsAny(lower, @[ @"microphone", @"audio" ])) return @"проблема с аудио";
     return @"ошибка распознавания";
 }
 

@@ -11,10 +11,20 @@
 - (void)overlayPanelDidRequestRawAsrFallback:(id)panel;
 @end
 
-/// Small fixed-size status pill displayed at bottom-center of screen, above the
-/// Dock. It never shows text: mic bars while recording, dots while processing,
-/// then a checkmark (delivered), a clipboard (copied only), an xmark
-/// (cancelled) or a red xmark (error) before it hides.
+/// The icon in front of a message on the pill.
+typedef NS_ENUM(NSInteger, SPOverlayMessageIcon) {
+    SPOverlayMessageIconError,
+    SPOverlayMessageIconClipboard,
+    SPOverlayMessageIconSuccess,
+    SPOverlayMessageIconNoSpeech,
+    SPOverlayMessageIconNotice,
+};
+
+/// Small status pill displayed at bottom-center of screen, above the Dock:
+/// mic bars while recording, dots while processing, then a checkmark
+/// (delivered), a clipboard (copied only), an xmark (cancelled) or a red xmark
+/// (error) before it hides. Transcripts never appear on it; only a short
+/// message (an error, "nothing heard") widens it for a few seconds.
 @interface SPOverlayPanel : NSObject
 
 @property (nonatomic, weak) id<SPOverlayPanelDelegate> delegate;
@@ -36,8 +46,18 @@
 - (void)setRawAsrFallbackClickEnabled:(BOOL)enabled;
 
 /// Switch the pill to the clipboard icon: the text was copied but not pasted.
-/// The badge text itself is not shown. Call after updateState:.
+/// The badge text itself is not shown (use showMessage:icon: for that). Call after updateState:.
 - (void)showResultBadge:(NSString *)badgeText;
+
+/// Widen the pill with one line of text after `icon`, then hide it once the
+/// text had time to be read. A session going idle meanwhile does not cut it short.
+- (void)showMessage:(NSString *)text icon:(SPOverlayMessageIcon)icon;
+
+/// While recording: a line next to the level bars ("Микрофон молчит"), nil to drop it.
+- (void)setRecordingHint:(NSString *)hint;
+
+/// Whether a message from showMessage:icon: is on screen.
+@property (nonatomic, readonly, getter=isShowingMessage) BOOL showingMessage;
 
 /// Flash one letter (the new text mode: R, L, S, F) in the pill for a moment.
 /// Same pill size as every other state; call only while no dictation is running.

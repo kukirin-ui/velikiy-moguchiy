@@ -41,7 +41,7 @@ use velikiy_moguchiy_asr::{AsrConfig, AsrEvent, AsrProvider, TranscriptAggregato
 
 use std::collections::HashSet;
 use std::ffi::c_char;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio::runtime::Runtime;
@@ -527,6 +527,8 @@ static MIC_VISUALISER: Mutex<Option<visualizer::AudioVisualiser>> = Mutex::new(N
 static MIC_LEVELS: Mutex<[f32; MIC_LEVEL_BUCKETS]> = Mutex::new([0.0; MIC_LEVEL_BUCKETS]);
 static SILENCE_DETECTOR: Mutex<Option<silence::SilenceDetector>> = Mutex::new(None);
 static SILENCE_STOP_FIRED: AtomicBool = AtomicBool::new(false);
+/// Loudest sample (0..1) since the level meter was last reset, as f32 bits.
+static MIC_PEAK: AtomicU32 = AtomicU32::new(0);
 
 /// Feed raw 16 kHz mono PCM16 samples into the overlay level meter.
 ///
@@ -538,6 +540,10 @@ pub unsafe extern "C" fn sp_core_feed_mic_levels(samples: *const i16, count: u32
         return;
     }
     let pcm = unsafe { std::slice::from_raw_parts(samples, count as usize) };
+    let peak = pcm.iter().map(|&s| s.unsigned_abs()).max().unwrap_or(0) as f32 / 32768.0;
+    let _ = MIC_PEAK.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |old| {
+        (peak > f32::from_bits(old)).then_some(peak.to_bits())
+    });
     if let Some(detector) = SILENCE_DETECTOR.lock().unwrap().as_mut() {
         if detector.feed(pcm) {
             SILENCE_STOP_FIRED.store(true, Ordering::SeqCst);
@@ -607,6 +613,14 @@ pub extern "C" fn sp_core_reset_mic_levels() {
         vis.reset();
     }
     *MIC_LEVELS.lock().unwrap() = [0.0; MIC_LEVEL_BUCKETS];
+    MIC_PEAK.store(0, Ordering::SeqCst);
+}
+
+/// Loudest sample (0..1) fed to the level meter since `sp_core_reset_mic_levels`.
+/// Stays at 0 when the microphone delivers nothing or digital silence.
+#[no_mangle]
+pub extern "C" fn sp_core_mic_peak() -> f32 {
+    f32::from_bits(MIC_PEAK.load(Ordering::SeqCst))
 }
 
 /// Set what the next session is for: 0 = dictation, 1 = translation, 2 = question
@@ -1302,6 +1316,8 @@ async fn run_session(
         );
         live_insert::abort(session_token);
         cleanup_session(&session_arc);
+        // Tells the app why nothing arrives; "idle" follows for clients that ignore it.
+        invoke_state_changed(session_token, "no_speech");
         invoke_state_changed(session_token, "idle");
         return;
     }
@@ -2585,6 +2601,20 @@ mod tests {
         assert_eq!(hotkey_trigger_mode_code("double_tap"), 2);
         assert_eq!(hotkey_trigger_mode_code("auto"), 3);
         assert_eq!(hotkey_trigger_mode_code("unknown"), 0);
+    }
+
+    #[test]
+    fn mic_peak_follows_the_loudest_sample_until_reset() {
+        sp_core_reset_mic_levels();
+        assert_eq!(sp_core_mic_peak(), 0.0);
+        let quiet = [0i16, 120, -80];
+        let loud = [16384i16, -20000, 3];
+        unsafe { sp_core_feed_mic_levels(quiet.as_ptr(), quiet.len() as u32) };
+        unsafe { sp_core_feed_mic_levels(loud.as_ptr(), loud.len() as u32) };
+        unsafe { sp_core_feed_mic_levels(quiet.as_ptr(), quiet.len() as u32) };
+        assert!((sp_core_mic_peak() - 20000.0 / 32768.0).abs() < 1e-6);
+        sp_core_reset_mic_levels();
+        assert_eq!(sp_core_mic_peak(), 0.0);
     }
 
     /// Mock ASR provider that yields a pre-configured sequence of events.

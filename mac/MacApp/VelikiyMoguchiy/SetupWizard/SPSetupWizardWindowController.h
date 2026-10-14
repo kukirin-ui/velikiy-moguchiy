@@ -15,6 +15,8 @@ void SPWriteViewSnapshot(NSView *view, NSString *path);
 
 @property (nonatomic, weak) id<SPSetupWizardDelegate> delegate;
 @property (nonatomic, strong) SPRustBridge *rustBridge;
+/// Brings the window up on `pane` (asr, llm, hotkey, …).
+- (void)showPane:(NSString *)pane;
 /// Design preview: shows the window on `screen` at `pane` (asr, llm, hotkey,
 /// overlay, dictionary, snippets, system_prompt, templates, about) without
 /// activating the app or taking focus.

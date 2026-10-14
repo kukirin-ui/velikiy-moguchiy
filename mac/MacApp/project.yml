@@ -125,6 +125,8 @@ targets:
       - path: VelikiyMoguchiy/AppDelegate/SPAppDelegateLogicTests.m
       - path: VelikiyMoguchiy/AppDelegate/SPOutputModes.m
       - path: VelikiyMoguchiy/AppDelegate/SPOutputModesTests.m
+      - path: VelikiyMoguchiy/Support/SPErrorExplainer.m
+      - path: VelikiyMoguchiy/Support/SPErrorExplainerTests.m
       - path: VelikiyMoguchiy/Hotkey/SPHotkeyMonitor.m
       - path: VelikiyMoguchiy/History/SPHistoryManager.m
       - path: VelikiyMoguchiy/History/SPHistoryManagerTests.m

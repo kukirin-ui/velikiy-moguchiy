@@ -81,9 +81,3 @@
 "menu.edit.copy" = "Скопировать";
 "menu.edit.paste" = "Вставить";
 "menu.edit.selectAll" = "Выбрать всё";
-
-"error.asr.timeout" = "Превышено время подключения к ASR";
-"error.asr.service" = "Ошибка сервиса ASR";
-"error.asr.auth" = "Ошибка авторизации ASR";
-"error.audio" = "Микрофон недоступен";
-"error.asr.unknown" = "Ошибка ASR";

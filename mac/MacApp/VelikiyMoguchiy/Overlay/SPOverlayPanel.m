@@ -8,6 +8,12 @@ static const CGFloat kPillWidth  = 76.0;
 static const CGFloat kPillHeight = 30.0;
 static const CGFloat kDefaultBottomMargin = 10.0;
 static const CGFloat kMaxBottomMargin = 180.0;
+// A message widens the pill: the icon on the left, one line of text after it.
+static const CGFloat kMessageMaxWidth = 420.0;
+static const CGFloat kMessageEdgeInset = 12.0;
+static const CGFloat kMessageGap = 8.0;
+static const CGFloat kMessageRightInset = 16.0;
+static const CGFloat kMessageFontSize = 12.5;
 
 // Waveform bars
 static const NSInteger kBarCount   = 6;
@@ -41,6 +47,10 @@ static const NSTimeInterval kClipboardLingerDuration = 1.2;
 static const NSTimeInterval kCancelledLingerDuration = 0.6;
 static const NSTimeInterval kErrorLingerDuration     = 1.5;
 static const NSTimeInterval kModeLetterLingerDuration = 1.2;
+// A message stays long enough to be read: a base plus a little per character.
+static const NSTimeInterval kMessageMinLinger = 3.0;
+static const NSTimeInterval kMessageMaxLinger = 7.0;
+static const NSTimeInterval kMessageLingerPerChar = 0.06;
 
 // An ink plate edged in ochre, with parchment-coloured marks: the overlay is
 // the same old book page as the Settings window, in its dark appearance.
@@ -118,7 +128,33 @@ typedef NS_ENUM(NSInteger, SPOverlayMode) {
     SPOverlayModeCancelled,
     SPOverlayModeError,
     SPOverlayModeLetter,
+    SPOverlayModeNotice,
 };
+
+/// Width the icon of `mode` takes on the left of a message.
+static CGFloat SPOverlayIconSlotWidth(SPOverlayMode mode) {
+    if (mode == SPOverlayModeWaveform) return 6 * 3.0 + 5 * 3.0;
+    return 18.0;
+}
+
+static NSAttributedString *SPOverlayMessageString(NSString *text) {
+    NSMutableParagraphStyle *paragraph = [[NSMutableParagraphStyle alloc] init];
+    paragraph.lineBreakMode = NSLineBreakByTruncatingTail;
+    return [[NSAttributedString alloc] initWithString:text
+                                           attributes:@{
+        NSFontAttributeName : [NSFont systemFontOfSize:kMessageFontSize weight:NSFontWeightMedium],
+        NSForegroundColorAttributeName : SPOverlayInkColor(),
+        NSParagraphStyleAttributeName : paragraph,
+    }];
+}
+
+/// The pill's width for `message` next to the icon of `mode`; the compact width without one.
+static CGFloat SPOverlayWidthForMessage(NSString *message, SPOverlayMode mode, CGFloat screenWidth) {
+    if (message.length == 0) return kPillWidth;
+    CGFloat textWidth = ceil(SPOverlayMessageString(message).size.width);
+    CGFloat width = kMessageEdgeInset + SPOverlayIconSlotWidth(mode) + kMessageGap + textWidth + kMessageRightInset;
+    return fmax(kPillWidth, fmin(width, fmin(kMessageMaxWidth, screenWidth - 32.0)));
+}
 
 // ── Click-aware effect view ──────────────────────────────
 
@@ -144,6 +180,9 @@ typedef NS_ENUM(NSInteger, SPOverlayMode) {
 @property (nonatomic, assign) SPOverlayMode mode;
 @property (nonatomic, assign) NSInteger     tick;  // animation counter
 @property (nonatomic, copy)   NSString     *letter; // SPOverlayModeLetter
+/// One line after the icon; nil keeps the compact pill.
+@property (nonatomic, copy)   NSString     *message;
+@property (nonatomic, copy)   NSString     *symbolName; // SPOverlayModeNotice
 /// Zero the smoothed bar levels so a new recording does not start from the
 /// previous one's tail.
 - (void)resetLevels;
@@ -194,6 +233,18 @@ typedef NS_ENUM(NSInteger, SPOverlayMode) {
 
     CGFloat centerX = NSMidX(bounds);
     CGFloat centerY = NSMidY(bounds);
+    if (self.message.length > 0) {
+        CGFloat slot = SPOverlayIconSlotWidth(self.mode);
+        centerX = NSMinX(bounds) + kMessageEdgeInset + slot / 2.0;
+        CGFloat textX = NSMinX(bounds) + kMessageEdgeInset + slot + kMessageGap;
+        NSRect textRect = NSMakeRect(textX, 0, NSMaxX(bounds) - kMessageRightInset - textX, NSHeight(bounds));
+        NSAttributedString *line = SPOverlayMessageString(self.message);
+        NSSize size = line.size;
+        textRect.origin.y = floor(centerY - size.height / 2.0);
+        textRect.size.height = ceil(size.height);
+        [line drawWithRect:textRect
+                   options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingTruncatesLastVisibleLine];
+    }
 
     switch (self.mode) {
         case SPOverlayModeWaveform:
@@ -217,6 +268,9 @@ typedef NS_ENUM(NSInteger, SPOverlayMode) {
             break;
         case SPOverlayModeLetter:
             [self drawLetterAtX:centerX centerY:centerY];
+            break;
+        case SPOverlayModeNotice:
+            [self drawSymbol:self.symbolName atX:centerX centerY:centerY color:SPOverlayOchreColor()];
             break;
         default:
             break;
@@ -305,35 +359,40 @@ typedef NS_ENUM(NSInteger, SPOverlayMode) {
 #pragma mark - Clipboard (copied, not pasted)
 
 - (void)drawClipboardAtX:(CGFloat)centerX centerY:(CGFloat)centerY {
-    NSImage *symbol = nil;
-    if (@available(macOS 11.0, *)) {
-        symbol = [NSImage imageWithSystemSymbolName:@"doc.on.clipboard" accessibilityDescription:nil];
-        symbol = [symbol imageWithSymbolConfiguration:
-                     [NSImageSymbolConfiguration configurationWithPointSize:15.0
-                                                                     weight:NSFontWeightMedium]];
-    }
-    if (!symbol) {
+    if (![self drawSymbol:@"doc.on.clipboard" atX:centerX centerY:centerY color:SPOverlayInkColor()]) {
         NSRect board = NSMakeRect(centerX - 6, centerY - 8, 12, 16);
         NSBezierPath *outline = [NSBezierPath bezierPathWithRoundedRect:board xRadius:2.5 yRadius:2.5];
         outline.lineWidth = 1.8;
         [SPOverlayInkColor() setStroke];
         [outline stroke];
-        return;
     }
+}
 
-    // Symbols are template images; fill them white instead of the default black.
-    NSImage *white = [NSImage imageWithSize:symbol.size
-                                    flipped:NO
-                             drawingHandler:^BOOL(NSRect dstRect) {
+/// Draws an SF Symbol centred on the point; NO when the system has no such symbol.
+- (BOOL)drawSymbol:(NSString *)name atX:(CGFloat)centerX centerY:(CGFloat)centerY color:(NSColor *)color {
+    NSImage *symbol = nil;
+    if (@available(macOS 11.0, *)) {
+        if (name.length > 0) symbol = [NSImage imageWithSystemSymbolName:name accessibilityDescription:nil];
+        symbol = [symbol imageWithSymbolConfiguration:
+                     [NSImageSymbolConfiguration configurationWithPointSize:15.0
+                                                                     weight:NSFontWeightMedium]];
+    }
+    if (!symbol) return NO;
+
+    // Symbols are template images; fill them with the ink instead of the default black.
+    NSImage *tinted = [NSImage imageWithSize:symbol.size
+                                     flipped:NO
+                              drawingHandler:^BOOL(NSRect dstRect) {
         [symbol drawInRect:dstRect];
-        [SPOverlayInkColor() set];
+        [color set];
         NSRectFillUsingOperation(dstRect, NSCompositingOperationSourceAtop);
         return YES;
     }];
-    [white drawAtPoint:NSMakePoint(centerX - white.size.width / 2.0, centerY - white.size.height / 2.0)
-              fromRect:NSZeroRect
-             operation:NSCompositingOperationSourceOver
-              fraction:1.0];
+    [tinted drawAtPoint:NSMakePoint(centerX - tinted.size.width / 2.0, centerY - tinted.size.height / 2.0)
+               fromRect:NSZeroRect
+              operation:NSCompositingOperationSourceOver
+               fraction:1.0];
+    return YES;
 }
 
 #pragma mark - Letter (text mode)
@@ -383,6 +442,7 @@ typedef NS_ENUM(NSInteger, SPOverlayMode) {
 @property (nonatomic, assign) CGFloat configuredBottomMargin;
 @property (nonatomic, assign, getter=isPreviewActive) BOOL previewActive;
 @property (nonatomic, assign) BOOL rawAsrFallbackClickEnabled;
+@property (nonatomic, assign) CGFloat pillWidth;
 
 @end
 
@@ -394,6 +454,7 @@ typedef NS_ENUM(NSInteger, SPOverlayMode) {
         _currentState = @"idle";
         _bottomMargin = kDefaultBottomMargin;
         _configuredBottomMargin = kDefaultBottomMargin;
+        _pillWidth = kPillWidth;
         [self setupPanel];
         [self reloadAppearanceFromConfig];
         [[NSWorkspace sharedWorkspace].notificationCenter
@@ -596,6 +657,7 @@ static void SPOrderFrontOnActiveSpace(NSWindow *window) {
     [self clearLingerTimer];
     [self setRawAsrFallbackClickEnabled:NO];
     self.currentState = @"idle";
+    self.contentView.message = nil;
     [self hide];
 
     if ([self.delegate respondsToSelector:@selector(overlayPanelDidDismiss:)]) {
@@ -619,6 +681,10 @@ static void SPOrderFrontOnActiveSpace(NSWindow *window) {
 
 /// How long the icon of the current mode stays on screen before the pill hides.
 - (NSTimeInterval)lingerDurationForCurrentMode {
+    if (self.contentView.message.length > 0) {
+        return fmin(kMessageMaxLinger,
+                    fmax(kMessageMinLinger, self.contentView.message.length * kMessageLingerPerChar + 1.5));
+    }
     switch (self.contentView.mode) {
         case SPOverlayModeClipboard: return kClipboardLingerDuration;
         case SPOverlayModeCancelled: return kCancelledLingerDuration;
@@ -630,7 +696,67 @@ static void SPOrderFrontOnActiveSpace(NSWindow *window) {
 
 #pragma mark - Public
 
+- (BOOL)isShowingMessage {
+    return self.contentView.message.length > 0 && [self.currentState isEqualToString:@"message"];
+}
+
+/// Puts `message` (or nothing) after the icon and resizes the pill to fit.
+- (void)applyMessage:(NSString *)message {
+    self.contentView.message = message.length > 0 ? message : nil;
+    NSRect visible = (self.screenOverride ?: [NSScreen mainScreen]).visibleFrame;
+    self.pillWidth = SPOverlayWidthForMessage(self.contentView.message, self.contentView.mode, NSWidth(visible));
+}
+
+- (void)showMessage:(NSString *)text icon:(SPOverlayMessageIcon)icon {
+    if (text.length == 0) return;
+    if (self.isPreviewActive) [self restoreConfiguredAppearanceIfNeeded];
+    [self clearLingerTimer];
+    [self setRawAsrFallbackClickEnabled:NO];
+    [self stopAnimation];
+    self.currentState = @"message";
+    switch (icon) {
+        case SPOverlayMessageIconError:
+            self.contentView.mode = SPOverlayModeError;
+            break;
+        case SPOverlayMessageIconClipboard:
+            self.contentView.mode = SPOverlayModeClipboard;
+            break;
+        case SPOverlayMessageIconSuccess:
+            self.contentView.mode = SPOverlayModeSuccess;
+            break;
+        case SPOverlayMessageIconNoSpeech:
+            self.contentView.mode = SPOverlayModeNotice;
+            self.contentView.symbolName = @"ear";
+            break;
+        case SPOverlayMessageIconNotice:
+            self.contentView.mode = SPOverlayModeNotice;
+            self.contentView.symbolName = @"exclamationmark.circle";
+            break;
+    }
+    [self applyMessage:text];
+    self.contentView.tick = 0;
+    [self positionPanel];
+    [self.contentView setNeedsDisplay:YES];
+    [self show];
+    if (icon == SPOverlayMessageIconSuccess) [self startAnimation];
+    [self scheduleDismissAfter:[self lingerDurationForCurrentMode]];
+}
+
+- (void)setRecordingHint:(NSString *)hint {
+    if (![self.currentState hasPrefix:@"recording"] || self.contentView.mode != SPOverlayModeWaveform) return;
+    NSString *current = self.contentView.message ?: @"";
+    if ([current isEqualToString:hint ?: @""]) return;
+    [self applyMessage:hint];
+    [self positionPanel];
+    [self.contentView setNeedsDisplay:YES];
+}
+
 - (void)updateState:(NSString *)state {
+    // The session ending quietly must not cut short a message being read.
+    if (self.isShowingMessage &&
+        ([state isEqualToString:@"idle"] || [state isEqualToString:@"completed"])) {
+        return;
+    }
     BOOL isPreviewState = [state hasSuffix:@"_preview"];
     if (self.isPreviewActive && !isPreviewState) {
         [self restoreConfiguredAppearanceIfNeeded];
@@ -643,6 +769,7 @@ static void SPOrderFrontOnActiveSpace(NSWindow *window) {
     [self stopAnimation];
 
     if ([state isEqualToString:@"idle"] || [state isEqualToString:@"completed"]) {
+        self.contentView.message = nil;
         [self hide];
         return;
     }
@@ -664,6 +791,7 @@ static void SPOrderFrontOnActiveSpace(NSWindow *window) {
         [(SPOverlayContentView *)self.contentView resetLevels];
     }
     self.contentView.mode = mode;
+    [self applyMessage:nil];
     self.contentView.tick = 0;
     [self positionPanel];
     [self.contentView setNeedsDisplay:YES];
@@ -696,6 +824,7 @@ static void SPOrderFrontOnActiveSpace(NSWindow *window) {
     self.currentState = @"mode_indicator";
     self.contentView.letter = letter;
     self.contentView.mode = SPOverlayModeLetter;
+    [self applyMessage:nil];
     self.contentView.tick = 0;
     [self positionPanel];
     [self.contentView setNeedsDisplay:YES];
@@ -708,6 +837,8 @@ static void SPOrderFrontOnActiveSpace(NSWindow *window) {
     if (badgeText.length == 0) return;
     [self stopAnimation];
     self.contentView.mode = SPOverlayModeClipboard;
+    [self applyMessage:nil];
+    [self positionPanel];
     self.contentView.tick = 0;
     [self.contentView setNeedsDisplay:YES];
 }
@@ -793,9 +924,9 @@ static void SPOrderFrontOnActiveSpace(NSWindow *window) {
 
 - (void)positionPanel {
     NSRect visible = (self.screenOverride ?: [NSScreen mainScreen]).visibleFrame;
-    NSRect frame = NSMakeRect(NSMidX(visible) - kPillWidth / 2.0,
+    NSRect frame = NSMakeRect(round(NSMidX(visible) - self.pillWidth / 2.0),
                               NSMinY(visible) + self.bottomMargin,
-                              kPillWidth,
+                              self.pillWidth,
                               kPillHeight);
     [self.panel setFrame:frame display:YES];
 }

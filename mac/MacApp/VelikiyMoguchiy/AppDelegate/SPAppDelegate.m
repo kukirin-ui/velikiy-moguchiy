@@ -30,6 +30,7 @@
 #import "SPOutputModes.h"
 #import "velikiy_moguchiy_core.h"
 #import "SPAppPaths.h"
+#import "SPErrorExplainer.h"
 #import <os/log.h>
 #import <sys/stat.h>
 #import <UserNotifications/UserNotifications.h>
@@ -57,7 +58,7 @@
 @property (nonatomic, weak) SPAppDelegate *target;
 @end
 
-@interface SPAppDelegate () <SPAudioDeviceManagerDelegate, SPOverlayPanelDelegate>
+@interface SPAppDelegate () <SPAudioDeviceManagerDelegate, SPOverlayPanelDelegate, UNUserNotificationCenterDelegate>
 @property (nonatomic, strong) SPRecentDictationsWindowController *recentDictations;
 @property (nonatomic, strong) NSPanel *designPreviewMenuPanel;
 // Recording of the session in flight, linked to its history row when the
@@ -105,6 +106,12 @@
 @property (nonatomic, strong) SPProblemReportWindowController *problemReport;
 @property (nonatomic, strong) SPHotkeyPurposeProxy *mouseHotkeyProxy;
 @property (nonatomic, strong) NSTimer *silenceStopTimer;
+// Watches the level meter while recording for a microphone that gives nothing.
+@property (nonatomic, strong) NSTimer *micSilenceTimer;
+// When each warning was last said, so a warning repeated on every dictation is said once in a while.
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSDate *> *warningShownAt;
+// A message that waits for the pill to finish the result of the session.
+@property (nonatomic, strong) SPErrorExplanation *pendingPillMessage;
 @property (nonatomic, assign) SPSessionPurpose pendingSessionPurpose;
 @property (nonatomic, assign) SPSessionPurpose sessionPurpose;
 // Session result metadata delivered just before the final text; consumed
@@ -154,7 +161,11 @@ static BOOL sessionStateAllowsConfigReload(NSString *state) {
 @implementation SPAppDelegate
 
 static const NSTimeInterval kManualPasteResultLingerDuration = 8.0;
-static const NSTimeInterval kAskAnswerLingerDuration = 20.0;
+// Peak below this (about -80 dBFS) is a muted, unplugged or wrong input, not a quiet room.
+static const float kSilentMicPeak = 0.0001f;
+static const NSTimeInterval kMicSilenceHintDelay = 2.5;
+static const NSTimeInterval kWarningRepeatInterval = 10 * 60;
+static NSString *const kSessionStartFailure = @"Не удалось начать сессию";
 static const NSTimeInterval kAbortResultLingerDuration = 0.8;
 static const NSTimeInterval kQuickBadgeLingerDuration = 1.8;
 
@@ -506,6 +517,8 @@ static BOOL SPLabFlag(const char *name) {
     [SPLipsRuntime sharedRuntime].rustBridge = self.rustBridge;
     [self startUpdateAndSetupChecks];
 
+    // Clicks on error notifications open the place that fixes the error.
+    [UNUserNotificationCenter currentNotificationCenter].delegate = self;
     // Request notification permission
     [self.permissionManager requestNotificationPermission];
 
@@ -1065,7 +1078,7 @@ static BOOL SPLabFlag(const char *name) {
     self.pendingDeliveryRemainder = nil;
     self.pendingSendRequest = NO;
     if (![self.rustBridge beginSessionWithMode:mode]) {
-        [self handleAudioCaptureError:@"Не удалось начать сессию"];
+        [self handleAudioCaptureError:kSessionStartFailure];
         return NO;
     }
     // Snapshot the effective clipboard restoration policy for this session.
@@ -1105,6 +1118,7 @@ static BOOL SPLabFlag(const char *name) {
     // Start Rust session + audio capture
     if (![self beginRustSessionWithMode:SPSessionModeHold]) return;
     [self startAudioCaptureWithRetryIncludingPreRoll:YES];
+    [self startMicSilenceWatch];
 }
 
 - (void)hotkeyMonitorDidDetectHoldEnd {
@@ -1162,6 +1176,56 @@ static BOOL SPLabFlag(const char *name) {
     if (![self beginRustSessionWithMode:SPSessionModeToggle]) return;
     [self startAudioCaptureWithRetryIncludingPreRoll:NO];
     [self startSilenceAutoStopIfConfigured];
+    [self startMicSilenceWatch];
+}
+
+#pragma mark - A microphone that gives nothing
+
+/// After a couple of seconds of a recording whose input never rose above
+/// digital silence, the pill says so next to its level bars.
+- (void)startMicSilenceWatch {
+    [self.micSilenceTimer invalidate];
+    uint64_t token = self.rustBridge.currentSessionToken;
+    NSDate *started = [NSDate date];
+    __weak typeof(self) weakSelf = self;
+    self.micSilenceTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
+                                                           repeats:YES
+                                                             block:^(NSTimer *timer) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf || token != strongSelf.rustBridge.currentSessionToken ||
+            ![strongSelf.sessionState hasPrefix:@"recording"]) {
+            [timer invalidate];
+            return;
+        }
+        if (-started.timeIntervalSinceNow < kMicSilenceHintDelay) return;
+        BOOL silent = sp_core_mic_peak() < kSilentMicPeak;
+        [strongSelf.overlayPanel setRecordingHint:silent ? @"Микрофон молчит" : nil];
+        if (!silent) [timer invalidate];
+    }];
+}
+
+/// The core heard no speech: the pill says why nothing was typed, and the
+/// recording stays listed in «Последние диктовки».
+- (void)finishSessionWithoutSpeech {
+    // A short press can end before a slow (Bluetooth) microphone delivers its first sound.
+    BOOL longEnough = self.recordingStartTime && -self.recordingStartTime.timeIntervalSinceNow >= kMicSilenceHintDelay;
+    BOOL micSilent = longEnough && sp_core_mic_peak() < kSilentMicPeak;
+    [self.micSilenceTimer invalidate];
+    self.sessionState = @"idle";
+    [self disarmAbortKey];
+    [self deactivateRawAsrFallbackInteraction];
+    self.sessionPurpose = SPSessionPurposeDictate;
+    self.editAnchor = nil;
+    [self recordUnfinishedSessionWithStatus:@"empty"
+                                      error:micSilent ? @"микрофон не дал звука" : @"в записи не было речи"];
+    [self.statusBarManager updateState:@"idle"];
+    if (micSilent) {
+        [self.overlayPanel showMessage:@"Микрофон молчит — проверьте вход в меню значка"
+                                  icon:SPOverlayMessageIconNotice];
+    } else {
+        [self.overlayPanel showMessage:@"Не расслышал" icon:SPOverlayMessageIconNoSpeech];
+    }
+    [self applyDeferredConfigReloadIfNeeded];
 }
 
 #pragma mark - Silence auto-stop (hands-free recordings)
@@ -1384,11 +1448,9 @@ static BOOL SPLabFlag(const char *name) {
         self.sessionPurpose = SPSessionPurposeDictate;
         [self.clipboardManager cancelPendingRestore];
         [self.clipboardManager writeText:text];
-        [self.overlayPanel updateDisplayText:text];
-        [self.overlayPanel updateState:@"pasting"];
-        [self.overlayPanel showResultBadge:@"✓ Скопировано"];
         [self.statusBarManager updateState:@"idle"];
-        [self.overlayPanel lingerAndDismissWithDuration:kAskAnswerLingerDuration];
+        [self.overlayPanel showMessage:[@"Ответ в буфере: " stringByAppendingString:[self firstLineOfText:text]]
+                                  icon:SPOverlayMessageIconClipboard];
         [self applyDeferredConfigReloadIfNeeded];
         return;
     }
@@ -1501,17 +1563,20 @@ static BOOL SPLabFlag(const char *name) {
     self.sessionWantsAudioCapture = NO;
     [self.audioCaptureManager stopCapture];
     [self discardArmedLipClip];
+    BOOL recordingKept = self.sessionAudioPath != nil;
     [self recordUnfinishedSessionWithStatus:@"error"
                                       error:[SPHistoryManager
                                                 errorReasonWithSummary:[SPRetranscriber summaryForProviderMessage:message]
                                                        providerMessage:message]];
     [self resetAllHotkeyMonitorsToIdle];
     [self.statusBarManager updateState:@"error"];
-    [self.overlayPanel updateState:@"error"];
 
-    // The pill only shows an xmark; the text goes to a system notification.
-    [self sendErrorNotification:[NSString stringWithFormat:@"%@\n%@",
-                                 [self localizedErrorSummary:message], message ?: @""]];
+    // The pill says what broke in a few words; the notification says what to do.
+    // The provider's own text stays in the log and the history row.
+    SPErrorExplanation *explanation = [SPErrorExplainer explanationForMessage:message recordingKept:recordingKept];
+    NSLog(@"[VelikiyMoguchiy] Error %@ shown as \"%@\"", explanation.code, explanation.shortText);
+    [self.overlayPanel showMessage:explanation.shortText icon:SPOverlayMessageIconError];
+    [self sendErrorNotificationForExplanation:explanation];
 
     // Brief error display, then back to idle.
     // Guard with session token so a new session isn't reset to idle.
@@ -1524,43 +1589,6 @@ static BOOL SPLabFlag(const char *name) {
         [self.overlayPanel updateState:@"idle"];
         [self applyDeferredConfigReloadIfNeeded];
     });
-}
-
-- (NSString *)localizedErrorSummary:(NSString *)message {
-    if (!message.length) return SPLocalizedString(@"error.asr.unknown");
-    NSString *lower = message.lowercaseString;
-    if ([lower containsString:@"timed out"] || [lower containsString:@"timeout"]) {
-        return SPLocalizedString(@"error.asr.timeout");
-    }
-    if ([lower containsString:@"starttask"] || [lower containsString:@"startsession"]) {
-        return SPLocalizedString(@"error.asr.service");
-    }
-    if ([lower containsString:@"credential"] || [lower containsString:@"token"] || [lower containsString:@"auth"]) {
-        return SPLocalizedString(@"error.asr.auth");
-    }
-    if ([lower containsString:@"microphone"] || [lower containsString:@"audio"]) {
-        return SPLocalizedString(@"error.audio");
-    }
-    return SPLocalizedString(@"error.asr.unknown");
-}
-
-- (void)sendWarningNotification:(NSString *)message {
-    UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
-    content.title = SPLocalizedString(@"notification.warning.title");
-    content.body = message;
-    content.sound = nil;
-
-    NSString *identifier = [NSString stringWithFormat:@"velikiy-moguchiy-warning-%f",
-                            [[NSDate date] timeIntervalSince1970]];
-    UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:identifier
-                                                                          content:content
-                                                                          trigger:nil];
-    [[UNUserNotificationCenter currentNotificationCenter] addNotificationRequest:request
-                                                           withCompletionHandler:^(NSError * _Nullable error) {
-        if (error) {
-            NSLog(@"[VelikiyMoguchiy] Failed to deliver warning notification: %@", error.localizedDescription);
-        }
-    }];
 }
 
 - (void)sendRetranscribedNotification:(NSString *)message {
@@ -1582,29 +1610,65 @@ static BOOL SPLabFlag(const char *name) {
     }];
 }
 
-- (void)sendErrorNotification:(NSString *)message {
+/// One banner per kind of message: a newer error replaces the older one. The
+/// click leads to the explanation's action (userNotificationCenter:didReceive…).
+- (void)postNotificationWithIdentifier:(NSString *)identifier
+                                 title:(NSString *)title
+                           explanation:(SPErrorExplanation *)explanation {
     UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
-    content.title = SPLocalizedString(@"notification.error.title");
-    content.body = message;
-    content.sound = nil; // Already playing error cue
-
-    NSString *identifier = [NSString stringWithFormat:@"velikiy-moguchiy-error-%f",
-                            [[NSDate date] timeIntervalSince1970]];
+    content.title = title;
+    content.body = [SPErrorExplainer notificationBodyForExplanation:explanation];
+    content.sound = nil;
+    content.userInfo = @{ @"action" : @(explanation.action) };
     UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:identifier
                                                                           content:content
                                                                           trigger:nil];
     [[UNUserNotificationCenter currentNotificationCenter] addNotificationRequest:request
                                                            withCompletionHandler:^(NSError * _Nullable error) {
         if (error) {
-            NSLog(@"[VelikiyMoguchiy] Failed to deliver error notification: %@", error.localizedDescription);
+            NSLog(@"[VelikiyMoguchiy] Failed to deliver notification: %@", error.localizedDescription);
         }
     }];
+}
+
+- (void)sendErrorNotificationForExplanation:(SPErrorExplanation *)explanation {
+    [self postNotificationWithIdentifier:@"velikiy-moguchiy-error"
+                                   title:SPLocalizedString(@"notification.error.title")
+                             explanation:explanation];
 }
 
 - (void)rustBridgeDidReceiveWarning:(NSString *)message {
     os_log_with_type(OS_LOG_DEFAULT, OS_LOG_TYPE_DEFAULT, "[VelikiyMoguchiy] Session warning: %{public}@", message ?: @"unknown warning");
     NSLog(@"[VelikiyMoguchiy] Session warning: %@", message);
-    [self sendWarningNotification:message];
+    SPErrorExplanation *explanation = [SPErrorExplainer explanationForWarning:message];
+    if (!explanation) return;
+    // Correction switched on without a key fails the same way on every dictation.
+    if (!self.warningShownAt) self.warningShownAt = [NSMutableDictionary dictionary];
+    NSDate *shownAt = self.warningShownAt[explanation.detail];
+    if (shownAt && -shownAt.timeIntervalSinceNow < kWarningRepeatInterval) return;
+    self.warningShownAt[explanation.detail] = [NSDate date];
+
+    [self.permissionManager checkNotificationPermissionWithCompletion:^(BOOL granted) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.quitting) return;
+            if (granted) {
+                [self postNotificationWithIdentifier:@"velikiy-moguchiy-warning"
+                                               title:SPLocalizedString(@"notification.warning.title")
+                                         explanation:explanation];
+            } else {
+                // The warning comes before the text is delivered: the pill
+                // says it once it has shown the result.
+                self.pendingPillMessage = explanation;
+            }
+        });
+    }];
+}
+
+/// The first line of `text`, short enough for the pill.
+- (NSString *)firstLineOfText:(NSString *)text {
+    NSString *line = [[text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]
+        componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet].firstObject ?: @"";
+    return line.length > 80 ? [[line substringToIndex:80] stringByAppendingString:@"…"] : line;
 }
 
 - (void)rustBridgeDidReceiveInterimText:(NSString *)text {
@@ -1769,6 +1833,10 @@ static BOOL SPLabFlag(const char *name) {
 
 - (void)rustBridgeDidChangeState:(NSString *)state {
     if (self.quitting || self.showingError) return;
+    if ([state isEqualToString:@"no_speech"]) {
+        [self finishSessionWithoutSpeech];
+        return;
+    }
     self.sessionState = state;
     BOOL isCorrecting = [state isEqualToString:@"correcting"];
     if (isCorrecting) {
@@ -2060,9 +2128,8 @@ static BOOL SPLabFlag(const char *name) {
         if (granted) {
             [self sendRetranscribedNotification:@"Распознано повторно — вставь ⌘V"];
         } else if (sessionStateAllowsConfigReload(self.sessionState)) {
-            [self.overlayPanel updateState:@"pasting"];
-            [self.overlayPanel showResultBadge:@"Распознано повторно — в буфере, ⌘V"];
-            [self.overlayPanel lingerAndDismissWithDuration:kManualPasteResultLingerDuration];
+            [self.overlayPanel showMessage:@"Распознано повторно — в буфере, ⌘V"
+                                      icon:SPOverlayMessageIconClipboard];
         }
     }];
 }
@@ -2084,8 +2151,16 @@ static BOOL SPLabFlag(const char *name) {
     [self.rustBridge cancelSession];
     [self resetAllHotkeyMonitorsToIdle];
     [self.statusBarManager updateState:@"error"];
-    [self.overlayPanel updateState:@"error"];
-    [self sendErrorNotification:reason];
+    SPErrorExplanation *explanation =
+        [reason isEqualToString:kSessionStartFailure]
+            ? [SPErrorExplainer explanationWithKind:SPErrorKindUnknown
+                                          shortText:@"Запись не началась"
+                                             detail:@"Попробуйте ещё раз. Если повторяется, напишите нам: "
+                                                    @"меню значка → «Сообщить о проблеме…»."
+                                             action:SPErrorActionNone]
+            : [SPErrorExplainer microphoneExplanationWithShortText:reason];
+    [self.overlayPanel showMessage:explanation.shortText icon:SPOverlayMessageIconError];
+    [self sendErrorNotificationForExplanation:explanation];
 
     uint64_t token = self.rustBridge.currentSessionToken;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)),
@@ -2233,7 +2308,8 @@ static BOOL SPLabFlag(const char *name) {
                     if (error) NSLog(@"[VelikiyMoguchiy] Failed to deliver notification: %@", error.localizedDescription);
                 }];
             } else if (sessionStateAllowsConfigReload(self.sessionState)) {
-                [self showQuickBadge:message];
+                [self.statusBarManager updateState:@"idle"];
+                [self.overlayPanel showMessage:message icon:SPOverlayMessageIconNotice];
             }
         });
     }];
@@ -2685,12 +2761,21 @@ static BOOL SPLabFlag(const char *name) {
 }
 
 - (void)statusBarDidSelectSetupWizard {
+    [self showSettingsPane:nil];
+}
+
+/// The Settings window, on `pane` when given (asr, llm, hotkey, …).
+- (void)showSettingsPane:(NSString *)pane {
     if (!self.setupWizard) {
         self.setupWizard = [[SPSetupWizardWindowController alloc] init];
         self.setupWizard.delegate = self;
         self.setupWizard.rustBridge = self.rustBridge;
     }
-    [self.setupWizard showWindow:nil];
+    if (pane.length > 0) {
+        [self.setupWizard showPane:pane];
+    } else {
+        [self.setupWizard showWindow:nil];
+    }
 }
 
 - (void)statusBarDidSelectRecentDictations {
@@ -2724,6 +2809,50 @@ static BOOL SPLabFlag(const char *name) {
     [self deactivateRawAsrFallbackInteraction];
     [self stopNumberKeyMonitoring];
     [self stopAnyKeyDismissMonitoring];
+    SPErrorExplanation *pending = self.pendingPillMessage;
+    self.pendingPillMessage = nil;
+    if (pending && sessionStateAllowsConfigReload(self.sessionState)) {
+        [self.overlayPanel showMessage:pending.shortText icon:SPOverlayMessageIconNotice];
+    }
+}
+
+#pragma mark - UNUserNotificationCenterDelegate
+
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+       willPresentNotification:(UNNotification *)notification
+         withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
+    // Shown while the Settings window is in front too: that is when a key gets fixed.
+    completionHandler(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionList);
+}
+
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+    didReceiveNotificationResponse:(UNNotificationResponse *)response
+             withCompletionHandler:(void (^)(void))completionHandler {
+    NSNumber *action = response.notification.request.content.userInfo[@"action"];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self performErrorAction:(SPErrorAction)action.integerValue];
+    });
+    completionHandler();
+}
+
+- (void)performErrorAction:(SPErrorAction)action {
+    switch (action) {
+        case SPErrorActionAsrSettings:
+            [self showSettingsPane:@"asr"];
+            break;
+        case SPErrorActionLlmSettings:
+            [self showSettingsPane:@"llm"];
+            break;
+        case SPErrorActionMicrophonePrivacy:
+            [[NSWorkspace sharedWorkspace]
+                openURL:[NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"]];
+            break;
+        case SPErrorActionRecentDictations:
+            [self statusBarDidSelectRecentDictations];
+            break;
+        case SPErrorActionNone:
+            break;
+    }
 }
 
 - (void)overlayPanelDidRequestRawAsrFallback:(id)panel {

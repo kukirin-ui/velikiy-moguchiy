@@ -1060,6 +1060,11 @@ static NSString *SPCondensedProviderError(NSString *raw) {
   }
 }
 
+- (void)showPane:(NSString *)pane {
+  [self switchToPane:pane];
+  [self showWindow:nil];
+}
+
 - (void)showWindow:(id)sender {
   if (!self.currentPaneIdentifier) {
     [self switchToPane:kToolbarASR];
