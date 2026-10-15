@@ -1,7 +1,7 @@
 name: Release
 
 # Two ways to a release, both building the Mac app and the unsigned IPA (build-apple.yml), the Android
-# APKs (build-android.yml) and the Windows app (build-windows.yml) with SHA-256 checksums:
+# APKs (build-android.yml), the Windows app (build-windows.yml) and the Linux CLI with SHA-256 checksums:
 #
 #   - automatic, once a day and on manual dispatch: tools/release/plan.py takes the newest commit of
 #     main whose push checks are all green and, when it changes a product since the last v* tag,
@@ -188,9 +188,44 @@ jobs:
       ref: ${{ needs.plan.outputs.sha }}
       version: ${{ needs.plan.outputs.version }}
 
+  linux:
+    name: Linux CLI
+    needs: [plan, privacy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      # cmake builds libopus from source and links it statically (no libopus-dev on purpose), and the
+      # bundled SQLite does the same, so the binary needs nothing beyond glibc.
+      - name: Build
+        run: cargo build --release --locked -p velikiy-moguchiy-cli --features rusqlite/bundled --target x86_64-unknown-linux-gnu
+      - name: Pack
+        run: |
+          set -euo pipefail
+          mkdir -p dist/velikiy-moguchiy-cli
+          cp target/x86_64-unknown-linux-gnu/release/velikiy-moguchiy dist/velikiy-moguchiy-cli/velikiy-moguchiy-cli
+          ./dist/velikiy-moguchiy-cli/velikiy-moguchiy-cli --help
+          ldd dist/velikiy-moguchiy-cli/velikiy-moguchiy-cli
+          tar -C dist -czf dist/velikiy-moguchiy-cli-linux-x86_64.tar.gz velikiy-moguchiy-cli
+      - name: Privacy scan
+        env:
+          PRIVACY_GUARD_EXTRA: ${{ secrets.PRIVACY_GUARD_EXTRA }}
+        run: python3 ../tools/scan_artifacts.py dist/velikiy-moguchiy-cli/velikiy-moguchiy-cli
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VelikiyMoguchiy-Linux-cli
+          path: mac/dist/velikiy-moguchiy-cli-linux-x86_64.tar.gz
+          if-no-files-found: error
+
   release:
     name: Release files
-    needs: [plan, privacy, build, android, windows]
+    needs: [plan, privacy, build, android, windows, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -225,7 +260,8 @@ jobs:
           test -f VelikiyMoguchiy-iOS-unsigned.ipa
           test -f VelikiyMoguchiy-Android-debug.apk
           test -f VelikiyMoguchiy-Windows-x64.zip
-          sha256sum VelikiyMoguchiy-macOS-arm64.zip VelikiyMoguchiy-iOS-unsigned.ipa VelikiyMoguchiy-Android*.apk VelikiyMoguchiy-Windows-x64.zip > SHA256SUMS.txt
+          test -f velikiy-moguchiy-cli-linux-x86_64.tar.gz
+          sha256sum VelikiyMoguchiy-macOS-arm64.zip VelikiyMoguchiy-iOS-unsigned.ipa VelikiyMoguchiy-Android*.apk VelikiyMoguchiy-Windows-x64.zip velikiy-moguchiy-cli-linux-x86_64.tar.gz > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create or update the release
@@ -239,7 +275,7 @@ jobs:
           NOTES: ${{ runner.temp }}/release-notes.md
         run: |
           set -euo pipefail
-          FILES=(dist/VelikiyMoguchiy-macOS-arm64.zip dist/VelikiyMoguchiy-iOS-unsigned.ipa dist/VelikiyMoguchiy-Android*.apk dist/VelikiyMoguchiy-Windows-x64.zip dist/SHA256SUMS.txt)
+          FILES=(dist/VelikiyMoguchiy-macOS-arm64.zip dist/VelikiyMoguchiy-iOS-unsigned.ipa dist/VelikiyMoguchiy-Android*.apk dist/VelikiyMoguchiy-Windows-x64.zip dist/velikiy-moguchiy-cli-linux-x86_64.tar.gz dist/SHA256SUMS.txt)
           TITLE="«Великий & Могучий» ${TAG#v}"
           FLAGS=()
           if [ "$PRERELEASE" = true ]; then FLAGS=(--prerelease); fi

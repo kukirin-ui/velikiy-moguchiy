@@ -160,6 +160,15 @@ velikiy-moguchiy model status mlx/Qwen3-ASR-0.6B-4bit
 velikiy-moguchiy model remove mlx/Qwen3-ASR-0.6B-4bit    # удалить файлы, манифест остаётся
 ```
 
+Для Linux (x86_64) тот же CLI есть в релизе отдельным архивом `velikiy-moguchiy-cli-linux-x86_64.tar.gz`. Ему нужна
+только glibc, ставить ничего не надо:
+
+```bash
+sha256sum -c --ignore-missing SHA256SUMS.txt               # если скачали и SHA256SUMS.txt
+tar -xzf velikiy-moguchiy-cli-linux-x86_64.tar.gz
+./velikiy-moguchiy-cli/velikiy-moguchiy-cli --help
+```
+
 Скачать модель можно и в настройках, на вкладке распознавания. Если и распознавание, и LLM локальные (MLX), приложение
 работает совсем без сети.
 
