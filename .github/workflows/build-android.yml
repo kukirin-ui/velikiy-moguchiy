@@ -74,6 +74,8 @@ jobs:
           VERSION="${VERSION#android-}"; VERSION="${VERSION#v}"; VERSION="${VERSION%%-*}"
           IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
           CODE=$(( ${MAJOR:-0} * 10000 + ${MINOR:-0} * 100 + ${PATCH:-0} ))
+          # Play and Gradle refuse versionCode 0, which a v0.0.0 test tag would give
+          [ "$CODE" -gt 0 ] || CODE=1
           echo "GRADLE_VERSION_ARGS=-PvmVersionName=$VERSION -PvmVersionCode=$CODE" >> "$GITHUB_ENV"
           echo "Android version $VERSION ($CODE)"
 
